@@ -61,6 +61,12 @@ function Settings() {
     clearExchangeRateCache,
   } = useOutletContext()
   const [pendingAction, setPendingAction] = useState('')
+  const [localPercentageFee, setLocalPercentageFee] = useState(() =>
+    String(settings.internationalPercentageFee ?? 0),
+  )
+  const [localFixedFee, setLocalFixedFee] = useState(() =>
+    String(settings.fixedFee ?? 0),
+  )
   const hasRates = Object.keys(exchangeState.rates || {}).length > 0
   const statusLabel =
     exchangeState.isLoading
@@ -111,6 +117,21 @@ function Settings() {
     }))
   }
 
+  function handleFeeInputChange(value, setLocalValue) {
+    setLocalValue(value)
+  }
+
+  function handleFeeInputBlur(field, value, setLocalValue) {
+    const numericValue = Number(String(value).replace(',', '.'))
+    const normalizedValue =
+      value === '' || !Number.isFinite(numericValue) || numericValue < 0
+        ? 0
+        : numericValue
+
+    setLocalValue(String(normalizedValue))
+    updateSetting(field, normalizedValue)
+  }
+
   function toggleCurrency(currency) {
     setSettings((currentSettings) => {
       const alreadyActive = currentSettings.activeCurrencies.includes(currency)
@@ -145,6 +166,8 @@ function Settings() {
   function confirmPendingAction() {
     if (pendingAction === 'resetDemo') {
       resetDemoData()
+      setLocalPercentageFee('0')
+      setLocalFixedFee('0')
     }
 
     if (pendingAction === 'clearFinancial') {
@@ -233,14 +256,20 @@ function Settings() {
           <label className="field">
             <span>Taxa percentual (%)</span>
             <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={settings.internationalPercentageFee}
+              type="text"
+              inputMode="decimal"
+              value={localPercentageFee}
               onChange={(event) =>
-                updateSetting(
+                handleFeeInputChange(
+                  event.target.value,
+                  setLocalPercentageFee,
+                )
+              }
+              onBlur={(event) =>
+                handleFeeInputBlur(
                   'internationalPercentageFee',
-                  Number(event.target.value),
+                  event.target.value,
+                  setLocalPercentageFee,
                 )
               }
             />
@@ -249,11 +278,15 @@ function Settings() {
           <label className="field">
             <span>Taxa fixa opcional</span>
             <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={settings.fixedFee}
-              onChange={(event) => updateSetting('fixedFee', Number(event.target.value))}
+              type="text"
+              inputMode="decimal"
+              value={localFixedFee}
+              onChange={(event) =>
+                handleFeeInputChange(event.target.value, setLocalFixedFee)
+              }
+              onBlur={(event) =>
+                handleFeeInputBlur('fixedFee', event.target.value, setLocalFixedFee)
+              }
             />
           </label>
         </div>

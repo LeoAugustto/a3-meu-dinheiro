@@ -65,6 +65,7 @@ npm run build
 - Dashboard com saldo consolidado, receitas, despesas, balanço, valores a receber, contas, cartões e lançamentos recentes.
 - Card de balanço mensal com barra contínua, tooltip e destaque sutil para despesas, saldo restante e valores a receber.
 - CRUD de transações, contas, categorias, metas e cartões.
+- Categorias com seletor de mês, seletor visual de ícones e orçamento mensal visível nos cards.
 - Transações com conta, categoria, cartão opcional, status, taxas, cotação manual e cotação automática.
 - Tabela de transações com coluna única **Valor**, exibindo valores confirmados, previstos, cotação travada e conversões sem duplicar informações desnecessárias.
 - Transações fixas mensais para receitas e despesas recorrentes.
@@ -74,7 +75,7 @@ npm run build
 - Ações rápidas para confirmar recebimento, confirmar despesa e marcar valor compartilhado como recebido.
 - Relatórios com filtros, ordenação, exportação CSV, impressão e resumos por período.
 - Relatórios com seção de recorrências e parcelamentos.
-- Configurações de moeda principal, moedas usadas, taxas padrão, cache e atualização de câmbio.
+- Configurações de moeda principal, moedas usadas, taxas padrão editáveis, cache e atualização de câmbio.
 - Modais próprios do app para confirmações importantes, sem popups nativos do navegador.
 - Estados vazios amigáveis e dados fictícios genéricos.
 

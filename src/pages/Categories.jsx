@@ -1,6 +1,23 @@
 import { useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { Edit3, Plus, Tags, Trash2, X } from 'lucide-react'
+import {
+  BookOpen,
+  Briefcase,
+  Bus,
+  CircleDollarSign,
+  Edit3,
+  HeartPulse,
+  Home,
+  MoreHorizontal,
+  Plus,
+  Receipt,
+  Tags,
+  Ticket,
+  Trash2,
+  Utensils,
+  WalletCards,
+  X,
+} from 'lucide-react'
 import ConfirmModal from '../components/ConfirmModal'
 import { formatCurrency } from '../utils/currency'
 import { getCategoryTotals } from '../utils/finance'
@@ -11,6 +28,32 @@ const emptyForm = {
   color: '#117a65',
   monthlyBudget: 0,
   icon: 'tag',
+}
+
+const categoryIconOptions = [
+  { value: 'utensils', label: 'Alimentação', icon: Utensils },
+  { value: 'home', label: 'Moradia', icon: Home },
+  { value: 'bus', label: 'Transporte', icon: Bus },
+  { value: 'book', label: 'Educação', icon: BookOpen },
+  { value: 'heart', label: 'Saúde', icon: HeartPulse },
+  { value: 'ticket', label: 'Lazer', icon: Ticket },
+  { value: 'receipt', label: 'Assinaturas', icon: Receipt },
+  { value: 'briefcase', label: 'Serviços', icon: Briefcase },
+  { value: 'wallet', label: 'Carteira', icon: WalletCards },
+  { value: 'dollar', label: 'Receita', icon: CircleDollarSign },
+  { value: 'more', label: 'Outros', icon: MoreHorizontal },
+  { value: 'tag', label: 'Geral', icon: Tags },
+]
+
+const categoryIconMap = categoryIconOptions.reduce((icons, option) => {
+  icons[option.value] = option.icon
+  return icons
+}, {})
+
+function CategoryIcon({ name, size = 20 }) {
+  const Icon = categoryIconMap[name] || Tags
+
+  return <Icon size={size} />
 }
 
 function Categories() {
@@ -197,13 +240,6 @@ function Categories() {
               />
             </label>
             <label className="field">
-              <span>Ícone</span>
-              <input
-                value={form.icon}
-                onChange={(event) => updateField('icon', event.target.value)}
-              />
-            </label>
-            <label className="field">
               <span>Cor</span>
               <input
                 type="color"
@@ -211,6 +247,27 @@ function Categories() {
                 onChange={(event) => updateField('color', event.target.value)}
               />
             </label>
+            <fieldset className="icon-picker full-span">
+              <legend>Ícone</legend>
+              <div className="icon-picker-grid">
+                {categoryIconOptions.map((option) => {
+                  const isSelected = form.icon === option.value
+
+                  return (
+                    <button
+                      className={`icon-picker-option ${isSelected ? 'is-selected' : ''}`}
+                      type="button"
+                      key={option.value}
+                      aria-pressed={isSelected}
+                      onClick={() => updateField('icon', option.value)}
+                    >
+                      <CategoryIcon name={option.value} size={19} />
+                      <span>{option.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </fieldset>
             <div className="form-footer full-span">
               <button className="secondary-button" type="button" onClick={resetForm}>
                 Cancelar
@@ -229,10 +286,14 @@ function Categories() {
         <section className="content-grid">
           {sortedCategories.map((category) => {
             const total = getTotalForCategory(category.id)
+            const budget = Number(category.monthlyBudget) || 0
             const budgetUsage =
-              category.monthlyBudget > 0
-                ? Math.min((total / category.monthlyBudget) * 100, 100)
+              budget > 0
+                ? Math.min((total / budget) * 100, 100)
                 : 0
+            const rawBudgetUsage = budget > 0 ? (total / budget) * 100 : 0
+            const budgetDifference = Math.abs(budget - total)
+            const isOverBudget = budget > 0 && total > budget
 
             return (
               <article className="category-card" key={category.id}>
@@ -244,7 +305,7 @@ function Categories() {
                       color: category.color,
                     }}
                   >
-                    <Tags size={20} />
+                    <CategoryIcon name={category.icon} size={20} />
                   </span>
                   <span className={`category-kind ${category.type}`}>
                     {category.type === 'income'
@@ -257,19 +318,31 @@ function Categories() {
 
                 <div>
                   <h2>{category.name}</h2>
-                  <p>
-                    {formatCurrency(total, settings.mainCurrency)} gasto neste mês
-                  </p>
+                  <p>{formatCurrency(total, settings.mainCurrency)} gasto neste mês</p>
                 </div>
 
-                {category.monthlyBudget > 0 ? (
-                  <div className="mini-progress">
-                    <span
-                      style={{
-                        width: `${budgetUsage}%`,
-                        backgroundColor: category.color,
-                      }}
-                    />
+                {budget > 0 ? (
+                  <div className="category-budget">
+                    <div className="category-budget-summary">
+                      <strong>
+                        {formatCurrency(total, settings.mainCurrency)} de{' '}
+                        {formatCurrency(budget, settings.mainCurrency)}
+                      </strong>
+                      <span>{Math.round(rawBudgetUsage)}% do orçamento usado</span>
+                      <small className={isOverBudget ? 'is-over-budget' : ''}>
+                        {formatCurrency(budgetDifference, settings.mainCurrency)}{' '}
+                        {isOverBudget ? 'acima do orçamento' : 'restantes'}
+                      </small>
+                    </div>
+                    <div className="mini-progress">
+                      <span
+                        className={isOverBudget ? 'is-over-budget' : ''}
+                        style={{
+                          width: `${budgetUsage}%`,
+                          backgroundColor: isOverBudget ? undefined : category.color,
+                        }}
+                      />
+                    </div>
                   </div>
                 ) : (
                   <span className="soft-pill">Sem orçamento mensal</span>

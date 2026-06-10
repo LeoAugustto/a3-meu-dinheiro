@@ -1245,6 +1245,10 @@ p {
   border-radius: inherit;
 }
 
+.mini-progress span.is-over-budget {
+  background: var(--expense);
+}
+
 .toolbar {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1413,6 +1417,64 @@ p {
 
 .entity-form {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.icon-picker {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+  padding: 12px;
+}
+
+.icon-picker legend {
+  color: var(--text);
+  font-weight: 800;
+  padding: 0 6px;
+}
+
+.icon-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.icon-picker-option {
+  display: grid;
+  min-height: 58px;
+  place-items: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--muted-strong);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 8px 6px;
+  text-align: center;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    color 0.18s ease,
+    background 0.18s ease;
+}
+
+.icon-picker-option:hover,
+.icon-picker-option:focus-visible {
+  border-color: var(--primary);
+  color: var(--primary);
+  outline: none;
+}
+
+.icon-picker-option.is-selected {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  box-shadow: 0 0 0 3px rgba(17, 122, 101, 0.12);
+  color: var(--primary);
 }
 
 .filters-panel {
@@ -2065,6 +2127,32 @@ p {
   margin-bottom: 6px;
 }
 
+.category-budget {
+  display: grid;
+  gap: 10px;
+}
+
+.category-budget-summary {
+  display: grid;
+  gap: 3px;
+}
+
+.category-budget-summary strong {
+  color: var(--text);
+  font-size: 0.98rem;
+}
+
+.category-budget-summary span,
+.category-budget-summary small {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.category-budget-summary small.is-over-budget {
+  color: var(--expense);
+  font-weight: 800;
+}
+
 .category-kind.income {
   background: var(--income-soft);
   color: var(--income);
@@ -2551,6 +2639,10 @@ p {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .icon-picker-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   .login-screen {
     padding-top: 88px;
     grid-template-columns: minmax(280px, 560px);
@@ -2686,6 +2778,10 @@ p {
   .filters-grid,
   .recurrence-grid {
     grid-template-columns: 1fr;
+  }
+
+  .icon-picker-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .month-selector {
@@ -2938,6 +3034,10 @@ p {
 
   .main-content {
     padding: 18px 12px 28px;
+  }
+
+  .icon-picker-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .page-header {
