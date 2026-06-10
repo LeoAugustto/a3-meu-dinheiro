@@ -9,6 +9,7 @@ const emptyForm = {
   name: '',
   brand: '',
   accountId: '',
+  lastFourDigits: '',
   limit: 0,
   used: 0,
   closingDay: 1,
@@ -40,6 +41,10 @@ function Cards() {
     setForm((currentForm) => ({ ...currentForm, [field]: value }))
   }
 
+  function updateLastFourDigits(value) {
+    updateField('lastFourDigits', value.replace(/\D/g, '').slice(0, 4))
+  }
+
   function resetForm() {
     setForm(emptyForm)
     setEditingId(null)
@@ -67,6 +72,7 @@ function Cards() {
     const nextCard = {
       ...form,
       id: editingId || `card-${Date.now()}`,
+      lastFourDigits: String(form.lastFourDigits || '').replace(/\D/g, '').slice(0, 4),
       limit: Number(form.limit) || 0,
       used: Number(form.used) || 0,
       closingDay: Number(form.closingDay) || 1,
@@ -145,6 +151,16 @@ function Cards() {
                 value={form.brand}
                 onChange={(event) => updateField('brand', event.target.value)}
                 placeholder="Ex.: Visa"
+              />
+            </label>
+            <label className="field">
+              <span>Últimos 4 dígitos</span>
+              <input
+                inputMode="numeric"
+                maxLength={4}
+                value={form.lastFourDigits || ''}
+                onChange={(event) => updateLastFourDigits(event.target.value)}
+                placeholder="Ex.: 2048"
               />
             </label>
             <label className="field">
@@ -230,7 +246,9 @@ function Cards() {
               <div className="credit-card-visual" style={{ backgroundColor: card.color }}>
                 <CreditCard size={28} />
                 <strong>{card.name}</strong>
-                <span>{card.brand || 'Cartão'} • **** 2048</span>
+                <span>
+                  {card.brand || 'Cartão'} • **** {card.lastFourDigits || '****'}
+                </span>
               </div>
 
               <div className="credit-card-details">
