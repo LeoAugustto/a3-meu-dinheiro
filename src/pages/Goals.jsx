@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { CalendarClock, Edit3, Plus, Target, Trash2, X } from 'lucide-react'
+import ConfirmModal from '../components/ConfirmModal'
 import DatePicker from '../components/DatePicker'
 import { formatCurrency } from '../utils/currency'
 import { formatDate } from '../utils/finance'
@@ -22,6 +23,7 @@ function Goals() {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
+  const [pendingDeleteId, setPendingDeleteId] = useState('')
   const sortedGoals = [...goals].sort((first, second) =>
     String(first.deadline || '9999-12-31').localeCompare(
       String(second.deadline || '9999-12-31'),
@@ -77,12 +79,17 @@ function Goals() {
   }
 
   function handleDelete(goalId) {
-    const shouldDelete = window.confirm('Deseja excluir esta meta?')
+    setPendingDeleteId(goalId)
+  }
 
-    if (shouldDelete) {
-      setGoals((currentGoals) => currentGoals.filter((goal) => goal.id !== goalId))
-      setFeedback('Meta excluída com sucesso.')
+  function confirmDelete() {
+    if (!pendingDeleteId) {
+      return
     }
+
+    setGoals((currentGoals) => currentGoals.filter((goal) => goal.id !== pendingDeleteId))
+    setPendingDeleteId('')
+    setFeedback('Meta excluída com sucesso.')
   }
 
   return (
@@ -252,6 +259,16 @@ function Goals() {
           })}
         </section>
       )}
+
+      <ConfirmModal
+        open={Boolean(pendingDeleteId)}
+        title="Deseja excluir esta meta?"
+        description="A meta será removida da lista de objetivos financeiros."
+        confirmLabel="Excluir"
+        variant="danger"
+        onCancel={() => setPendingDeleteId('')}
+        onConfirm={confirmDelete}
+      />
     </div>
   )
 }

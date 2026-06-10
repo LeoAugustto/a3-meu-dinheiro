@@ -30,10 +30,13 @@ import {
 } from '../utils/finance'
 import {
   addMonthsToDate,
+  generateInstallmentSchedule,
   getDateWithDay,
+  isInRecurrenceScope,
   isRecurringTransaction,
   recurrenceTypeLabels,
 } from '../utils/recurrences'
+import { getTransactionValueDisplay } from '../utils/transactionValue'
 
 const emptyFilters = {
   search: '',
@@ -461,13 +464,8 @@ function Transactions() {
         cards.find((card) => card.id === transaction.cardId)?.name || '',
     },
     {
-      key: 'amount',
-      label: 'Valor original',
-      getValue: (transaction) => Number(transaction.amount) || 0,
-    },
-    {
-      key: 'converted',
-      label: 'Convertido',
+      key: 'value',
+      label: 'Valor',
       getValue: (transaction) =>
         Number(getTransactionConversionView(transaction).convertedAmount) || 0,
     },
@@ -703,30 +701,28 @@ function Transactions() {
 
   function createInstallmentTransactions() {
     const recurrenceId = `parc-${Date.now()}`
-    const installmentTotal = Number(form.installmentCount) || 1
-    const installmentStartNumber = Number(form.installmentStartNumber) || 1
     const rawAmount = Number(form.amount) || 0
-    const installmentAmount =
-      form.installmentAmountMode === 'total'
-        ? rawAmount / installmentTotal
-        : rawAmount
     const firstDate = form.installmentFirstDate || form.date
-    const occurrences = []
 
-    for (
-      let installmentNumber = installmentStartNumber;
-      installmentNumber <= installmentTotal;
-      installmentNumber += 1
-    ) {
-      const index = installmentNumber - installmentStartNumber
-      const occurrenceDate = addMonthsToDate(firstDate, index)
-      const description = `${form.description.trim()} (${installmentNumber}/${installmentTotal})`
-
-      occurrences.push(
+    return generateInstallmentSchedule({
+      description: form.description,
+      amount: rawAmount,
+      amountMode: form.installmentAmountMode,
+      installmentTotal: form.installmentCount,
+      installmentStartNumber: form.installmentStartNumber,
+      firstDate,
+    }).map(
+      ({
+        description,
+        amount,
+        installmentNumber,
+        installmentTotal,
+        occurrenceDate,
+      }) =>
         getBaseTransaction({
           id: `txn-${Date.now()}-parc-${installmentNumber}`,
           description,
-          amount: installmentAmount,
+          amount,
           date: occurrenceDate,
           status: form.installmentInitialStatus,
           recurrenceMeta: {
@@ -743,10 +739,7 @@ function Transactions() {
             isInstallment: true,
           },
         }),
-      )
-    }
-
-    return occurrences
+    )
   }
 
   function applyEditToRecurringOccurrence(transaction, sourceTransaction) {
@@ -810,26 +803,7 @@ function Transactions() {
   }
 
   function isInScope(transaction, sourceTransaction, scope) {
-    if (scope === 'single') {
-      return transaction.id === sourceTransaction.id
-    }
-
-    if (transaction.recurrenceId !== sourceTransaction.recurrenceId) {
-      return false
-    }
-
-    if (scope === 'all') {
-      return true
-    }
-
-    if (sourceTransaction.recurrenceType === 'installment') {
-      return (
-        Number(transaction.installmentNumber) >=
-        Number(sourceTransaction.installmentNumber)
-      )
-    }
-
-    return transaction.date >= sourceTransaction.date
+    return isInRecurrenceScope(transaction, sourceTransaction, scope)
   }
 
   function openPendingAction(action) {
@@ -1437,16 +1411,8 @@ function Transactions() {
                 </th>
                 <th>
                   <SortButton
-                    label="Valor original"
-                    sortKey="amount"
-                    sortConfig={transactionSortConfig}
-                    onSort={requestTransactionSort}
-                  />
-                </th>
-                <th>
-                  <SortButton
-                    label="Convertido"
-                    sortKey="converted"
+                    label="Valor"
+                    sortKey="value"
                     sortConfig={transactionSortConfig}
                     onSort={requestTransactionSort}
                   />
@@ -1483,6 +1449,13 @@ function Transactions() {
                 const account = accounts.find((item) => item.id === transaction.accountId)
                 const card = cards.find((item) => item.id === transaction.cardId)
                 const conversionView = getTransactionConversionView(transaction)
+                const valueDisplay = getTransactionValueDisplay(
+                  transaction,
+                  conversionView,
+                  {
+                    sourceStatus: conversionView.locked ? 'updated' : exchangeState.status,
+                  },
+                )
                 const sharedAmountToReceive =
                   Number(transaction.sharedAmountToReceive) || 0
                 return (
@@ -1510,22 +1483,12 @@ function Transactions() {
                     </td>
                     <td data-label="Conta">{account?.name || 'Conta removida'}</td>
                     <td data-label="Cartão">{card?.name || 'Sem cartão'}</td>
-                    <td data-label="Valor original">
-                      {formatCurrency(transaction.amount, transaction.fromCurrency)}
-                      <small>{transaction.fromCurrency}</small>
-                    </td>
-                    <td data-label="Convertido">
-                      {formatCurrency(conversionView.convertedAmount, transaction.toCurrency)}
-                      <small>
-                        {transaction.toCurrency} • {conversionView.valueLabel}
-                      </small>
-                      <small>
-                        {conversionView.exchangeLabel}: {formatRate(conversionView.rate)} •{' '}
-                        {formatExchangeSource(
-                          conversionView.source,
-                          conversionView.locked ? 'updated' : exchangeState.status,
-                        )}
-                      </small>
+                    <td data-label="Valor" className="transaction-value-cell">
+                      <strong>{valueDisplay.main}</strong>
+                      <small>{valueDisplay.statusLine}</small>
+                      {valueDisplay.rateLine ? <small>{valueDisplay.rateLine}</small> : null}
+                      {valueDisplay.feeLine ? <small>{valueDisplay.feeLine}</small> : null}
+                      {valueDisplay.finalLine ? <small>{valueDisplay.finalLine}</small> : null}
                     </td>
                     <td data-label="Categoria">{getCategoryLabel(transaction.categoryId)}</td>
                     <td data-label="Data">{formatDate(transaction.date)}</td>

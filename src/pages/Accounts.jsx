@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { Edit3, Plus, Trash2, WalletCards, X } from 'lucide-react'
+import ConfirmModal from '../components/ConfirmModal'
 import { currencies } from '../data/mockData'
 import { formatCurrency } from '../utils/currency'
 import { calculateAccountBalances, statusLabels } from '../utils/finance'
@@ -22,6 +23,7 @@ function Accounts() {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
+  const [pendingDeleteId, setPendingDeleteId] = useState('')
   const accountsWithBalances = useMemo(
     () => calculateAccountBalances(accounts, transactions),
     [accounts, transactions],
@@ -93,15 +95,18 @@ function Accounts() {
       return
     }
 
-    const shouldDelete = window.confirm('Deseja excluir esta conta?')
+    setPendingDeleteId(accountId)
+  }
 
-    if (!shouldDelete) {
+  function confirmDelete() {
+    if (!pendingDeleteId) {
       return
     }
 
     setAccounts((currentAccounts) =>
-      currentAccounts.filter((account) => account.id !== accountId),
+      currentAccounts.filter((account) => account.id !== pendingDeleteId),
     )
+    setPendingDeleteId('')
     setFeedback('Conta excluída com sucesso.')
   }
 
@@ -264,6 +269,16 @@ function Accounts() {
           ))}
         </section>
       )}
+
+      <ConfirmModal
+        open={Boolean(pendingDeleteId)}
+        title="Deseja excluir esta conta?"
+        description="A conta será removida da lista de contas cadastradas."
+        confirmLabel="Excluir"
+        variant="danger"
+        onCancel={() => setPendingDeleteId('')}
+        onConfirm={confirmDelete}
+      />
     </div>
   )
 }

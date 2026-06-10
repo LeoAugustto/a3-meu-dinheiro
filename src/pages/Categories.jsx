@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { Edit3, Plus, Tags, Trash2, X } from 'lucide-react'
+import ConfirmModal from '../components/ConfirmModal'
 import { formatCurrency } from '../utils/currency'
 import { getCategoryTotals } from '../utils/finance'
 
@@ -26,6 +27,7 @@ function Categories() {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
+  const [pendingDeleteId, setPendingDeleteId] = useState('')
   const totals = useMemo(
     () => getCategoryTotals(transactions, selectedMonth),
     [transactions, selectedMonth],
@@ -99,37 +101,38 @@ function Categories() {
       return
     }
 
+    setPendingDeleteId(categoryId)
+  }
+
+  function confirmDelete() {
+    if (!pendingDeleteId) {
+      return
+    }
+
     const hasTransactions = transactions.some(
-      (transaction) => transaction.categoryId === categoryId,
+      (transaction) => transaction.categoryId === pendingDeleteId,
     )
 
     if (hasTransactions) {
-      const shouldMove = window.confirm(
-        'Existem transações nesta categoria. Deseja movê-las para Outros?',
-      )
-
-      if (!shouldMove) {
-        return
-      }
-
       setTransactions((currentTransactions) =>
         currentTransactions.map((transaction) =>
-          transaction.categoryId === categoryId
+          transaction.categoryId === pendingDeleteId
             ? { ...transaction, categoryId: 'cat-other' }
             : transaction,
         ),
       )
     }
 
-    const shouldDelete = window.confirm('Deseja excluir esta categoria?')
-
-    if (shouldDelete) {
-      setCategories((currentCategories) =>
-        currentCategories.filter((item) => item.id !== categoryId),
-      )
-      setFeedback('Categoria excluída com sucesso.')
-    }
+    setCategories((currentCategories) =>
+      currentCategories.filter((item) => item.id !== pendingDeleteId),
+    )
+    setPendingDeleteId('')
+    setFeedback('Categoria excluída com sucesso.')
   }
+
+  const pendingDeleteHasTransactions = transactions.some(
+    (transaction) => transaction.categoryId === pendingDeleteId,
+  )
 
   return (
     <div className="page-stack">
@@ -295,6 +298,20 @@ function Categories() {
           })}
         </section>
       )}
+
+      <ConfirmModal
+        open={Boolean(pendingDeleteId)}
+        title="Deseja excluir esta categoria?"
+        description={
+          pendingDeleteHasTransactions
+            ? 'Existem transações nesta categoria. Elas serão movidas para Outros antes da exclusão.'
+            : 'A categoria será removida da lista de categorias.'
+        }
+        confirmLabel="Excluir"
+        variant="danger"
+        onCancel={() => setPendingDeleteId('')}
+        onConfirm={confirmDelete}
+      />
     </div>
   )
 }

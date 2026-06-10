@@ -38,6 +38,82 @@ export function getDateWithDay(baseDate, repeatDay) {
   )}`
 }
 
+export function generateInstallmentSchedule({
+  description,
+  amount,
+  amountMode = 'total',
+  installmentTotal,
+  installmentStartNumber = 1,
+  firstDate,
+}) {
+  const totalInstallments = Math.max(Number(installmentTotal) || 1, 1)
+  const startNumber = Math.min(
+    Math.max(Number(installmentStartNumber) || 1, 1),
+    totalInstallments,
+  )
+  const rawAmount = Number(amount) || 0
+  const installmentAmount = amountMode === 'total' ? rawAmount / totalInstallments : rawAmount
+  const baseDescription = String(description || '').trim()
+
+  return Array.from(
+    { length: totalInstallments - startNumber + 1 },
+    (_, index) => {
+      const installmentNumber = startNumber + index
+      const occurrenceDate = addMonthsToDate(firstDate, index)
+
+      return {
+        description: `${baseDescription} (${installmentNumber}/${totalInstallments})`,
+        amount: installmentAmount,
+        installmentNumber,
+        installmentTotal: totalInstallments,
+        occurrenceDate,
+      }
+    },
+  )
+}
+
+export function isInRecurrenceScope(transaction, sourceTransaction, scope) {
+  if (scope === 'single') {
+    return transaction.id === sourceTransaction.id
+  }
+
+  if (transaction.recurrenceId !== sourceTransaction.recurrenceId) {
+    return false
+  }
+
+  if (scope === 'all') {
+    return true
+  }
+
+  if (sourceTransaction.recurrenceType === 'installment') {
+    return (
+      Number(transaction.installmentNumber) >=
+      Number(sourceTransaction.installmentNumber)
+    )
+  }
+
+  return transaction.date >= sourceTransaction.date
+}
+
+export function applyRecurrenceScopeUpdate(
+  transactions,
+  sourceTransaction,
+  scope,
+  updater,
+) {
+  return transactions.map((transaction) =>
+    isInRecurrenceScope(transaction, sourceTransaction, scope)
+      ? updater(transaction)
+      : transaction,
+  )
+}
+
+export function filterRecurrenceScope(transactions, sourceTransaction, scope) {
+  return transactions.filter(
+    (transaction) => !isInRecurrenceScope(transaction, sourceTransaction, scope),
+  )
+}
+
 export function isRecurringTransaction(transaction) {
   return (
     transaction.recurrenceType === 'fixed' ||

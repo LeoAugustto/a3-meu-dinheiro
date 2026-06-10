@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { CalendarDays, CreditCard, Edit3, Plus, Trash2, X } from 'lucide-react'
+import ConfirmModal from '../components/ConfirmModal'
 import { formatCurrency } from '../utils/currency'
 import { calculateCardUsage } from '../utils/finance'
 
@@ -22,6 +23,7 @@ function Cards() {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
+  const [pendingDeleteId, setPendingDeleteId] = useState('')
   const cardsWithUsage = useMemo(
     () => calculateCardUsage(cards, transactions),
     [cards, transactions],
@@ -85,12 +87,17 @@ function Cards() {
   }
 
   function handleDelete(cardId) {
-    const shouldDelete = window.confirm('Deseja excluir este cartão?')
+    setPendingDeleteId(cardId)
+  }
 
-    if (shouldDelete) {
-      setCards((currentCards) => currentCards.filter((card) => card.id !== cardId))
-      setFeedback('Cartão excluído com sucesso.')
+  function confirmDelete() {
+    if (!pendingDeleteId) {
+      return
     }
+
+    setCards((currentCards) => currentCards.filter((card) => card.id !== pendingDeleteId))
+    setPendingDeleteId('')
+    setFeedback('Cartão excluído com sucesso.')
   }
 
   return (
@@ -271,6 +278,16 @@ function Cards() {
           ))}
         </section>
       )}
+
+      <ConfirmModal
+        open={Boolean(pendingDeleteId)}
+        title="Deseja excluir este cartão?"
+        description="O cartão será removido da lista de cartões cadastrados."
+        confirmLabel="Excluir"
+        variant="danger"
+        onCancel={() => setPendingDeleteId('')}
+        onConfirm={confirmDelete}
+      />
     </div>
   )
 }

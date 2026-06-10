@@ -1634,7 +1634,7 @@ p {
 
 .transactions-table {
   width: 100%;
-  min-width: 1040px;
+  min-width: 940px;
   border-collapse: collapse;
 }
 
@@ -1665,6 +1665,15 @@ p {
 .transactions-table small {
   display: block;
   margin-top: 4px;
+}
+
+.transaction-value-cell strong {
+  white-space: nowrap;
+}
+
+.transaction-value-cell small {
+  max-width: 230px;
+  line-height: 1.35;
 }
 
 .status-pill,

@@ -29,6 +29,19 @@ describe('currency utilities', () => {
     expect(converted).toBe(500)
   })
 
+  it('uses rate 1 for same-currency conversions without requiring exchange rates', () => {
+    const details = getConversionDetails({
+      amount: 200,
+      fromCurrency: 'BRL',
+      toCurrency: 'BRL',
+      source: 'Mesma moeda',
+    })
+
+    expect(details.rate).toBe(1)
+    expect(details.finalAmount).toBe(200)
+    expect(details.source).toBe('Mesma moeda')
+  })
+
   it('formats supported currencies', () => {
     expect(formatCurrency(5197.5, 'BRL')).toBe('R$ 5.197,50')
     expect(formatCurrency(1000, 'USD')).toBe('US$ 1.000,00')

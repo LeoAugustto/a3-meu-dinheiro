@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -8,6 +9,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useOutletContext } from 'react-router-dom'
+import ConfirmModal from '../components/ConfirmModal'
 import { currencies } from '../data/mockData'
 import {
   formatCurrency,
@@ -58,6 +60,7 @@ function Settings() {
     clearFinancialData,
     clearExchangeRateCache,
   } = useOutletContext()
+  const [pendingAction, setPendingAction] = useState('')
   const hasRates = Object.keys(exchangeState.rates || {}).length > 0
   const statusLabel =
     exchangeState.isLoading
@@ -128,34 +131,54 @@ function Settings() {
   }
 
   function handleResetDemoData() {
-    const shouldReset = window.confirm(
-      'Restaurar os dados de demonstração? Os dados atuais serão substituídos.',
-    )
-
-    if (shouldReset) {
-      resetDemoData()
-    }
+    setPendingAction('resetDemo')
   }
 
   function handleClearFinancialData() {
-    const shouldClear = window.confirm(
-      'Limpar todos os dados financeiros salvos? Esta ação não pode ser desfeita.',
-    )
-
-    if (shouldClear) {
-      clearFinancialData()
-    }
+    setPendingAction('clearFinancial')
   }
 
   function handleClearExchangeCache() {
-    const shouldClear = window.confirm(
-      'Limpar o cache de cotações? A conversão automática precisará buscar novas taxas ou usar cotação manual.',
-    )
+    setPendingAction('clearExchange')
+  }
 
-    if (shouldClear) {
+  function confirmPendingAction() {
+    if (pendingAction === 'resetDemo') {
+      resetDemoData()
+    }
+
+    if (pendingAction === 'clearFinancial') {
+      clearFinancialData()
+    }
+
+    if (pendingAction === 'clearExchange') {
       clearExchangeRateCache()
     }
+
+    setPendingAction('')
   }
+
+  const pendingActionContent = {
+    resetDemo: {
+      title: 'Deseja restaurar os dados de demonstração?',
+      description: 'Os dados atuais serão substituídos pelos dados fictícios iniciais.',
+      label: 'Restaurar',
+      variant: 'default',
+    },
+    clearFinancial: {
+      title: 'Deseja limpar todos os dados locais?',
+      description: 'Transações, contas, categorias, metas e cartões salvos serão removidos.',
+      label: 'Limpar dados',
+      variant: 'danger',
+    },
+    clearExchange: {
+      title: 'Deseja limpar o cache de cotações?',
+      description:
+        'A conversão automática precisará buscar novas taxas ou usar cotação manual.',
+      label: 'Limpar cache',
+      variant: 'danger',
+    },
+  }[pendingAction]
 
   return (
     <div className="settings-grid">
@@ -405,6 +428,16 @@ function Settings() {
           </button>
         </div>
       </section>
+
+      <ConfirmModal
+        open={Boolean(pendingAction)}
+        title={pendingActionContent?.title || ''}
+        description={pendingActionContent?.description || ''}
+        confirmLabel={pendingActionContent?.label || 'Confirmar'}
+        variant={pendingActionContent?.variant || 'default'}
+        onCancel={() => setPendingAction('')}
+        onConfirm={confirmPendingAction}
+      />
     </div>
   )
 }

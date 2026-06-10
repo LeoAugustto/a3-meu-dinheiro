@@ -33,6 +33,11 @@ import {
   getCommitmentSummary,
   recurrenceTypeLabels,
 } from '../utils/recurrences'
+import {
+  formatTransactionValueForCsv,
+  getStoredTransactionConversionView,
+  getTransactionValueDisplay,
+} from '../utils/transactionValue'
 
 function getMonthRange(month) {
   if (!month || !month.includes('-')) {
@@ -257,27 +262,21 @@ function Reports() {
 
   function exportCsv() {
     const headers = [
-      'Descricao',
+      'Descrição',
       'Tipo',
-      'Valor original',
-      'Moeda origem',
-      'Valor convertido',
-      'Moeda destino',
+      'Valor',
       'Categoria',
       'Data',
       'Status',
-      'Fonte da cotacao',
+      'Fonte da cotação',
       'Taxa usada',
-      'Recorrencia',
+      'Recorrência',
       'Parcela',
     ]
     const rows = reportTransactions.map((transaction) => [
       transaction.description,
       transaction.type,
-      transaction.amount,
-      transaction.fromCurrency,
-      transaction.convertedAmount,
-      transaction.toCurrency,
+      formatTransactionValueForCsv(transaction),
       getCategoryName(transaction.categoryId),
       transaction.date,
       transaction.status,
@@ -675,24 +674,32 @@ function Reports() {
               <p className="empty-state">Nenhuma conversão de moeda neste período.</p>
             ) : (
               <div className="compact-list">
-                {conversionRows.map((transaction) => (
-                  <div className="compact-row" key={transaction.id}>
-                    <div>
-                      <strong>{transaction.description}</strong>
-                      <span>
-                        {transaction.fromCurrency} para {transaction.toCurrency} • Fonte:{' '}
-                        {formatExchangeSource(transaction.exchangeSource)}
-                        {transaction.exchangeDate
-                          ? ` • Data da cotação: ${formatExchangeDate(transaction.exchangeDate)}`
-                          : ''}
-                      </span>
+                {conversionRows.map((transaction) => {
+                  const valueDisplay = getTransactionValueDisplay(
+                    transaction,
+                    getStoredTransactionConversionView(transaction),
+                    { sourceStatus: 'updated' },
+                  )
+
+                  return (
+                    <div className="compact-row" key={transaction.id}>
+                      <div>
+                        <strong>{transaction.description}</strong>
+                        <span>
+                          Fonte: {formatExchangeSource(transaction.exchangeSource)}
+                          {transaction.exchangeDate
+                            ? ` • Data da cotação: ${formatExchangeDate(transaction.exchangeDate)}`
+                            : ''}
+                        </span>
+                        <span>
+                          {valueDisplay.statusLine}
+                          {valueDisplay.rateLine ? ` • ${valueDisplay.rateLine}` : ''}
+                        </span>
+                      </div>
+                      <strong>{valueDisplay.main}</strong>
                     </div>
-                    <strong>
-                      {formatCurrency(transaction.amount, transaction.fromCurrency)} →{' '}
-                      {formatCurrency(transaction.convertedAmount, transaction.toCurrency)}
-                    </strong>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </section>

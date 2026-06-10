@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyTransactionFilters,
   getCategoryTotals,
+  getEffectiveConvertedAmount,
   getMonthSummary,
 } from './finance'
 
@@ -125,6 +126,35 @@ describe('finance utilities', () => {
     expect(summary.sharedReceivables).toBe(600)
     expect(summary.income).toBe(500)
     expect(summary.balance).toBe(500)
+  })
+
+  it('previews pending foreign currency transactions with the current rate', () => {
+    const transaction = {
+      amount: 100,
+      convertedAmount: 400,
+      fromCurrency: 'USD',
+      toCurrency: 'BRL',
+      status: 'receivable',
+      exchangeLocked: false,
+    }
+
+    expect(getEffectiveConvertedAmount(transaction, { USD_BRL: 5.25 })).toBe(525)
+    expect(getEffectiveConvertedAmount(transaction, { USD_BRL: 6 })).toBe(600)
+  })
+
+  it('keeps confirmed foreign currency transactions locked after rate updates', () => {
+    const transaction = {
+      amount: 100,
+      convertedAmount: 519.75,
+      fromCurrency: 'USD',
+      toCurrency: 'BRL',
+      status: 'confirmed',
+      exchangeLocked: true,
+      rate: 5.1975,
+      exchangeSource: 'Google Sheets / GOOGLEFINANCE',
+    }
+
+    expect(getEffectiveConvertedAmount(transaction, { USD_BRL: 6 })).toBe(519.75)
   })
 
   it('applies advanced filters', () => {
