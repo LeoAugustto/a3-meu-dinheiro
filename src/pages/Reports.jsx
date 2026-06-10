@@ -13,9 +13,12 @@ import {
 } from 'lucide-react'
 import CategoryBar from '../components/CategoryBar'
 import CollapsibleFilters from '../components/CollapsibleFilters'
+import DatePicker from '../components/DatePicker'
 import MetricCard from '../components/MetricCard'
 import MonthPicker from '../components/MonthPicker'
+import SortControls from '../components/SortControls'
 import { currencies } from '../data/mockData'
+import { useSortableData } from '../hooks/useSortableData'
 import {
   formatCurrency,
   formatExchangeDate,
@@ -27,6 +30,11 @@ import {
   isBalanceTransaction,
   isReceivableTransaction,
 } from '../utils/finance'
+import {
+  formatCommitmentSubtitle,
+  getCommitmentSummary,
+  recurrenceTypeLabels,
+} from '../utils/recurrences'
 
 function getMonthRange(month) {
   if (!month || !month.includes('-')) {
@@ -243,6 +251,40 @@ function Reports() {
   const conversionRows = reportTransactions.filter(
     (transaction) => transaction.fromCurrency !== transaction.toCurrency,
   )
+  const commitmentSummary = useMemo(
+    () => getCommitmentSummary(reportTransactions, selectedMonth),
+    [reportTransactions, selectedMonth],
+  )
+  const commitmentSortOptions = useMemo(
+    () => [
+      { key: 'name', label: 'Nome', getValue: (row) => row.name },
+      {
+        key: 'value',
+        label: 'Valor',
+        getValue: (row) => Number(row.monthlyValue || row.remainingValue) || 0,
+      },
+      {
+        key: 'nextDueDate',
+        label: 'Próximo vencimento',
+        getValue: (row) => row.nextDueDate || '',
+      },
+      {
+        key: 'remaining',
+        label: 'Parcelas restantes',
+        getValue: (row) => Number(row.openCount) || 0,
+      },
+      { key: 'status', label: 'Status', getValue: (row) => row.status },
+    ],
+    [],
+  )
+  const {
+    sortedItems: sortedCommitments,
+    sortConfig: commitmentSortConfig,
+    updateSort: updateCommitmentSort,
+  } = useSortableData(commitmentSummary.rows, commitmentSortOptions, {
+    key: 'nextDueDate',
+    direction: 'asc',
+  })
 
   function exportCsv() {
     const headers = [
@@ -257,6 +299,8 @@ function Reports() {
       'Status',
       'Fonte da cotacao',
       'Taxa usada',
+      'Recorrencia',
+      'Parcela',
     ]
     const rows = reportTransactions.map((transaction) => [
       transaction.description,
@@ -270,6 +314,10 @@ function Reports() {
       transaction.status,
       transaction.exchangeSource || '',
       transaction.rate || '',
+      recurrenceTypeLabels[transaction.recurrenceType] || '',
+      transaction.installmentTotal
+        ? `${transaction.installmentNumber}/${transaction.installmentTotal}`
+        : '',
     ])
     const csv = [headers, ...rows]
       .map((row) =>
@@ -327,18 +375,22 @@ function Reports() {
           </div>
           <label className="field">
             <span>Data inicial</span>
-            <input
-              type="date"
+            <DatePicker
               value={effectiveStartDate}
-              onChange={(event) => updateFilter('startDate', event.target.value)}
+              onChange={(value) => updateFilter('startDate', value)}
+              allowClear
+              placeholder="Data inicial"
+              ariaLabel="Selecionar data inicial"
             />
           </label>
           <label className="field">
             <span>Data final</span>
-            <input
-              type="date"
+            <DatePicker
               value={effectiveEndDate}
-              onChange={(event) => updateFilter('endDate', event.target.value)}
+              onChange={(value) => updateFilter('endDate', value)}
+              allowClear
+              placeholder="Data final"
+              ariaLabel="Selecionar data final"
             />
           </label>
           <label className="field">
@@ -573,6 +625,79 @@ function Reports() {
               icon={HandCoins}
               variant="info"
             />
+          </section>
+
+          <section className="panel">
+            <div className="section-heading">
+              <div>
+                <span className="eyebrow">Planejamento</span>
+                <h2>Recorrências e parcelamentos</h2>
+              </div>
+            </div>
+
+            <SortControls
+              options={commitmentSortOptions}
+              sortConfig={commitmentSortConfig}
+              onChange={updateCommitmentSort}
+            />
+
+            <div className="metrics-grid compact-metrics">
+              <MetricCard
+                title="Fixas de despesa"
+                value={formatCurrency(
+                  commitmentSummary.fixedExpensesMonthlyValue,
+                  settings.mainCurrency,
+                )}
+                subtitle={`${commitmentSummary.fixedExpensesCount} recorrências`}
+                icon={ArrowDownLeft}
+                variant="expense"
+              />
+              <MetricCard
+                title="Fixas de receita"
+                value={formatCurrency(
+                  commitmentSummary.fixedIncomesMonthlyValue,
+                  settings.mainCurrency,
+                )}
+                subtitle={`${commitmentSummary.fixedIncomesCount} recorrências`}
+                icon={ArrowUpRight}
+                variant="income"
+              />
+              <MetricCard
+                title="Parcelas abertas"
+                value={`${commitmentSummary.installmentsOpenCount}`}
+                subtitle={formatCurrency(
+                  commitmentSummary.installmentsRemainingValue,
+                  settings.mainCurrency,
+                )}
+                icon={WalletCards}
+                variant="info"
+              />
+            </div>
+
+            {sortedCommitments.length === 0 ? (
+              <p className="empty-state">Nenhuma recorrência ou parcelamento no período.</p>
+            ) : (
+              <div className="compact-list report-commitment-list">
+                {sortedCommitments.map((row) => (
+                  <div className="compact-row" key={row.id}>
+                    <div>
+                      <strong>{row.name}</strong>
+                      <span>
+                        {recurrenceTypeLabels[row.type] || row.type} • Próximo:{' '}
+                        {row.nextLabel} • {row.status}
+                      </span>
+                      <span>{formatCommitmentSubtitle(row)}</span>
+                    </div>
+                    <strong>
+                      {formatCurrency(
+                        row.monthlyValue || row.remainingValue,
+                        row.currency || settings.mainCurrency,
+                      )}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           <section className="panel">

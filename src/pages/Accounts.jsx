@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { Edit3, Plus, Trash2, WalletCards, X } from 'lucide-react'
+import SortControls from '../components/SortControls'
 import { currencies } from '../data/mockData'
+import { useSortableData } from '../hooks/useSortableData'
 import { formatCurrency } from '../utils/currency'
 import { calculateAccountBalances, statusLabels } from '../utils/finance'
 
@@ -26,6 +28,28 @@ function Accounts() {
     () => calculateAccountBalances(accounts, transactions),
     [accounts, transactions],
   )
+  const accountSortOptions = useMemo(
+    () => [
+      { key: 'name', label: 'Nome', getValue: (account) => account.name },
+      { key: 'type', label: 'Tipo', getValue: (account) => account.type },
+      { key: 'currency', label: 'Moeda', getValue: (account) => account.currency },
+      {
+        key: 'balance',
+        label: 'Saldo',
+        getValue: (account) => Number(account.currentBalance) || 0,
+      },
+      { key: 'status', label: 'Status', getValue: (account) => account.status },
+    ],
+    [],
+  )
+  const {
+    sortedItems: sortedAccounts,
+    sortConfig: accountSortConfig,
+    updateSort: updateAccountSort,
+  } = useSortableData(accountsWithBalances, accountSortOptions, {
+    key: 'name',
+    direction: 'asc',
+  })
 
   function updateField(field, value) {
     setForm((currentForm) => ({ ...currentForm, [field]: value }))
@@ -118,6 +142,12 @@ function Accounts() {
       {error ? <p className="form-error">{error}</p> : null}
       {feedback ? <p className="form-success">{feedback}</p> : null}
 
+      <SortControls
+        options={accountSortOptions}
+        sortConfig={accountSortConfig}
+        onChange={updateAccountSort}
+      />
+
       {isFormOpen ? (
         <section className="panel">
           <div className="section-heading">
@@ -208,7 +238,7 @@ function Accounts() {
         <p className="empty-state">Nenhuma conta cadastrada ainda.</p>
       ) : (
         <section className="content-grid">
-          {accountsWithBalances.map((account) => (
+          {sortedAccounts.map((account) => (
             <article className="account-card" key={account.id}>
               <div className="entity-topline">
                 <span

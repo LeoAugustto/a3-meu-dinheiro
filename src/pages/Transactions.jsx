@@ -10,7 +10,11 @@ import {
   X,
 } from 'lucide-react'
 import CollapsibleFilters from '../components/CollapsibleFilters'
+import DatePicker from '../components/DatePicker'
+import SortButton from '../components/SortButton'
+import SortControls from '../components/SortControls'
 import { currencies } from '../data/mockData'
+import { useSortableData } from '../hooks/useSortableData'
 import {
   formatCurrency,
   formatExchangeDate,
@@ -24,6 +28,13 @@ import {
   formatDate,
   statusLabels,
 } from '../utils/finance'
+import {
+  addMonthsToDate,
+  getDateWithDay,
+  getScopeFromPrompt,
+  isRecurringTransaction,
+  recurrenceTypeLabels,
+} from '../utils/recurrences'
 
 const emptyFilters = {
   search: '',
@@ -89,6 +100,16 @@ function createEmptyForm(settings, accounts) {
     shared: false,
     sharedAmountToReceive: '',
     status: 'confirmed',
+    recurrenceType: 'none',
+    repeatDay: new Date().getDate(),
+    recurrenceStartDate: getTodayInputValue(),
+    recurrenceEndDate: '',
+    recurrenceInitialStatus: 'pending',
+    installmentCount: 1,
+    installmentStartNumber: 1,
+    installmentAmountMode: 'total',
+    installmentFirstDate: getTodayInputValue(),
+    installmentInitialStatus: 'pending',
   }
 }
 
@@ -110,6 +131,16 @@ function createFormFromTransaction(transaction) {
     shared: Boolean(transaction.shared),
     sharedAmountToReceive: String(transaction.sharedAmountToReceive || ''),
     status: transaction.status || 'confirmed',
+    recurrenceType: transaction.recurrenceType || 'none',
+    repeatDay: String(transaction.repeatDay || new Date().getDate()),
+    recurrenceStartDate: transaction.startDate || transaction.date,
+    recurrenceEndDate: transaction.endDate || '',
+    recurrenceInitialStatus: transaction.status || 'pending',
+    installmentCount: String(transaction.installmentTotal || 1),
+    installmentStartNumber: String(transaction.installmentNumber || 1),
+    installmentAmountMode: 'installment',
+    installmentFirstDate: transaction.date,
+    installmentInitialStatus: transaction.status || 'pending',
   }
 }
 
@@ -387,6 +418,67 @@ function Transactions() {
     }
   }
 
+  const transactionSortOptions = [
+    {
+      key: 'description',
+      label: 'Descrição',
+      getValue: (transaction) => transaction.description,
+    },
+    {
+      key: 'type',
+      label: 'Tipo',
+      getValue: (transaction) => transaction.type,
+    },
+    {
+      key: 'account',
+      label: 'Conta',
+      getValue: (transaction) =>
+        accounts.find((account) => account.id === transaction.accountId)?.name ||
+        '',
+    },
+    {
+      key: 'card',
+      label: 'Cartão',
+      getValue: (transaction) =>
+        cards.find((card) => card.id === transaction.cardId)?.name || '',
+    },
+    {
+      key: 'amount',
+      label: 'Valor original',
+      getValue: (transaction) => Number(transaction.amount) || 0,
+    },
+    {
+      key: 'converted',
+      label: 'Convertido',
+      getValue: (transaction) =>
+        Number(getTransactionConversionView(transaction).convertedAmount) || 0,
+    },
+    {
+      key: 'category',
+      label: 'Categoria',
+      getValue: (transaction) => getCategoryLabel(transaction.categoryId),
+    },
+    {
+      key: 'date',
+      label: 'Data',
+      getValue: (transaction) => transaction.date,
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      getValue: (transaction) => statusLabels[transaction.status] || transaction.status,
+    },
+  ]
+  const {
+    sortedItems: sortedTransactions,
+    sortConfig: transactionSortConfig,
+    requestSort: requestTransactionSort,
+    updateSort: updateTransactionSort,
+  } = useSortableData(filteredTransactions, transactionSortOptions, {
+    key: 'date',
+    direction: 'desc',
+  })
+
   function updateField(field, value) {
     setForm((currentForm) => {
       const nextForm = { ...currentForm, [field]: value }
@@ -443,10 +535,284 @@ function Transactions() {
     if (Number(form.amount) <= 0) return 'Informe um valor maior que zero.'
     if (!form.accountId) return 'Selecione uma conta.'
     if (!form.categoryId) return 'Selecione uma categoria.'
+    if (form.recurrenceType === 'fixed') {
+      if (!form.recurrenceStartDate) return 'Informe a data inicial da recorrência.'
+      if (Number(form.repeatDay) < 1 || Number(form.repeatDay) > 31) {
+        return 'Informe um dia do mês entre 1 e 31.'
+      }
+    }
+    if (form.recurrenceType === 'installment') {
+      if (!form.installmentFirstDate) return 'Informe a data da primeira parcela.'
+      if (Number(form.installmentCount) <= 1) {
+        return 'Informe pelo menos 2 parcelas.'
+      }
+    }
     if (conversionPreview.error) {
       return getFriendlyConversionError(conversionPreview.error)
     }
     return ''
+  }
+
+  function getConversionForAmount(amount) {
+    return getConversionDetails({
+      amount,
+      fromCurrency: form.fromCurrency,
+      toCurrency: form.toCurrency,
+      rates: automaticRatesAvailable ? exchangeState.rates : {},
+      percentageFee: form.percentageFee,
+      fixedFee: form.fixedFee,
+      manualRate: form.manualRate,
+      source: hasManualRate
+        ? 'Cotação manual'
+        : form.fromCurrency === form.toCurrency
+          ? 'Mesma moeda'
+          : exchangeState.source || 'Cotação automática indisponível',
+      rateDate: hasManualRate ? '' : getExchangeDateFromState(exchangeState),
+    })
+  }
+
+  function getBaseTransaction({
+    id,
+    description,
+    amount,
+    date,
+    status,
+    recurrenceMeta = {},
+    currentTransaction,
+  }) {
+    const details = getConversionForAmount(amount)
+    const finalStatus = form.type === 'expense' && form.shared ? 'confirmed' : form.status
+    const appliedStatus = status || finalStatus
+    const shouldLockExchange = lockedStatuses.includes(appliedStatus)
+    const exchangeSource =
+      form.fromCurrency === form.toCurrency ? 'Mesma moeda' : details.source
+    const exchangeDetail = getExchangeSourceDetail(form, exchangeState, exchangeSource)
+
+    return {
+      id,
+      description,
+      type: form.type,
+      amount: Number(amount) || 0,
+      fromCurrency: form.fromCurrency,
+      toCurrency: form.toCurrency,
+      convertedAmount: details.finalAmount,
+      accountId: form.accountId,
+      cardId: form.type === 'expense' ? form.cardId : '',
+      categoryId: form.categoryId,
+      date,
+      percentageFee: Number(form.percentageFee) || 0,
+      fixedFee: Number(form.fixedFee) || 0,
+      manualRate: form.manualRate,
+      rate: details.rate,
+      useAutomaticRate: form.useAutomaticRate,
+      status: appliedStatus,
+      shared: form.type === 'expense' ? form.shared : false,
+      sharedAmountToReceive:
+        form.type === 'expense' && form.shared
+          ? Number(form.sharedAmountToReceive) || 0
+          : 0,
+      exchangeSource,
+      exchangeDetail,
+      exchangeDate: details.rateDate,
+      sourceUpdatedAt: details.rateDate,
+      confirmedAt: shouldLockExchange ? currentTransaction?.confirmedAt || new Date().toISOString() : '',
+      exchangeLocked: shouldLockExchange,
+      ...recurrenceMeta,
+    }
+  }
+
+  function createSingleTransaction(currentTransaction) {
+    return getBaseTransaction({
+      id: editingId || `txn-${Date.now()}`,
+      description: form.description.trim(),
+      amount: Number(form.amount) || 0,
+      date: form.date,
+      currentTransaction,
+      recurrenceMeta: {
+        recurrenceType: 'none',
+        recurrenceId: '',
+        isRecurring: false,
+        isInstallment: false,
+      },
+    })
+  }
+
+  function createFixedTransactions() {
+    const recurrenceId = `rec-${Date.now()}`
+    const startDate = form.recurrenceStartDate || form.date
+    const endDate = form.recurrenceEndDate
+    const repeatDay = Number(form.repeatDay) || 1
+    const occurrences = []
+    const maxOccurrences = endDate ? 120 : 24
+
+    for (let index = 0; index < maxOccurrences; index += 1) {
+      const monthBase = addMonthsToDate(startDate, index)
+      const occurrenceDate = getDateWithDay(monthBase, repeatDay)
+
+      if (occurrenceDate < startDate) {
+        continue
+      }
+
+      if (endDate && occurrenceDate > endDate) {
+        break
+      }
+
+      occurrences.push(
+        getBaseTransaction({
+          id: `txn-${Date.now()}-fix-${index}`,
+          description: form.description.trim(),
+          amount: Number(form.amount) || 0,
+          date: occurrenceDate,
+          status: form.recurrenceInitialStatus,
+          recurrenceMeta: {
+            recurrenceType: 'fixed',
+            recurrenceId,
+            recurrenceScope: 'all',
+            parentTransactionId: recurrenceId,
+            parentDescription: form.description.trim(),
+            repeatDay,
+            startDate,
+            endDate,
+            occurrenceDate,
+            isRecurring: true,
+            isInstallment: false,
+          },
+        }),
+      )
+    }
+
+    return occurrences
+  }
+
+  function createInstallmentTransactions() {
+    const recurrenceId = `parc-${Date.now()}`
+    const installmentTotal = Number(form.installmentCount) || 1
+    const installmentStartNumber = Number(form.installmentStartNumber) || 1
+    const rawAmount = Number(form.amount) || 0
+    const installmentAmount =
+      form.installmentAmountMode === 'total'
+        ? rawAmount / installmentTotal
+        : rawAmount
+    const firstDate = form.installmentFirstDate || form.date
+    const occurrences = []
+
+    for (
+      let installmentNumber = installmentStartNumber;
+      installmentNumber <= installmentTotal;
+      installmentNumber += 1
+    ) {
+      const index = installmentNumber - installmentStartNumber
+      const occurrenceDate = addMonthsToDate(firstDate, index)
+      const description = `${form.description.trim()} (${installmentNumber}/${installmentTotal})`
+
+      occurrences.push(
+        getBaseTransaction({
+          id: `txn-${Date.now()}-parc-${installmentNumber}`,
+          description,
+          amount: installmentAmount,
+          date: occurrenceDate,
+          status: form.installmentInitialStatus,
+          recurrenceMeta: {
+            recurrenceType: 'installment',
+            recurrenceId,
+            recurrenceScope: 'all',
+            parentTransactionId: recurrenceId,
+            parentDescription: form.description.trim(),
+            installmentNumber,
+            installmentTotal,
+            startDate: firstDate,
+            occurrenceDate,
+            isRecurring: false,
+            isInstallment: true,
+          },
+        }),
+      )
+    }
+
+    return occurrences
+  }
+
+  function applyEditToRecurringOccurrence(transaction, sourceTransaction) {
+    const shouldPreserveLockedExchange = hasLockedExchange(transaction)
+    const installmentDescription =
+      transaction.recurrenceType === 'installment'
+        ? `${form.description.trim()} (${transaction.installmentNumber}/${transaction.installmentTotal})`
+        : form.description.trim()
+    const amount = Number(form.amount) || 0
+    const details = shouldPreserveLockedExchange
+      ? null
+      : getConversionForAmount(amount)
+    const nextStatus = shouldPreserveLockedExchange
+      ? transaction.status
+      : form.type === 'expense' && form.shared
+        ? 'confirmed'
+        : form.status
+
+    return {
+      ...transaction,
+      description: installmentDescription,
+      parentDescription: form.description.trim(),
+      type: form.type,
+      amount,
+      fromCurrency: form.fromCurrency,
+      toCurrency: form.toCurrency,
+      accountId: form.accountId,
+      cardId: form.type === 'expense' ? form.cardId : '',
+      categoryId: form.categoryId,
+      percentageFee: Number(form.percentageFee) || 0,
+      fixedFee: Number(form.fixedFee) || 0,
+      manualRate: form.manualRate,
+      useAutomaticRate: form.useAutomaticRate,
+      shared: form.type === 'expense' ? form.shared : false,
+      sharedAmountToReceive:
+        form.type === 'expense' && form.shared
+          ? Number(form.sharedAmountToReceive) || 0
+          : 0,
+      status: nextStatus,
+      convertedAmount: shouldPreserveLockedExchange
+        ? transaction.convertedAmount
+        : details.finalAmount,
+      rate: shouldPreserveLockedExchange ? transaction.rate : details.rate,
+      exchangeSource: shouldPreserveLockedExchange
+        ? transaction.exchangeSource
+        : form.fromCurrency === form.toCurrency
+          ? 'Mesma moeda'
+          : details.source,
+      exchangeDetail: shouldPreserveLockedExchange
+        ? transaction.exchangeDetail
+        : getExchangeSourceDetail(sourceTransaction, exchangeState, details.source),
+      exchangeDate: shouldPreserveLockedExchange
+        ? transaction.exchangeDate
+        : details.rateDate,
+      sourceUpdatedAt: shouldPreserveLockedExchange
+        ? transaction.sourceUpdatedAt
+        : details.rateDate,
+      exchangeLocked: shouldPreserveLockedExchange || lockedStatuses.includes(nextStatus),
+      confirmedAt: shouldPreserveLockedExchange ? transaction.confirmedAt : '',
+    }
+  }
+
+  function isInScope(transaction, sourceTransaction, scope) {
+    if (scope === 'single') {
+      return transaction.id === sourceTransaction.id
+    }
+
+    if (transaction.recurrenceId !== sourceTransaction.recurrenceId) {
+      return false
+    }
+
+    if (scope === 'all') {
+      return true
+    }
+
+    if (sourceTransaction.recurrenceType === 'installment') {
+      return (
+        Number(transaction.installmentNumber) >=
+        Number(sourceTransaction.installmentNumber)
+      )
+    }
+
+    return transaction.date >= sourceTransaction.date
   }
 
   function handleSubmit(event) {
@@ -461,69 +827,83 @@ function Transactions() {
     const currentTransaction = transactions.find(
       (transaction) => transaction.id === editingId,
     )
-    const finalStatus = form.type === 'expense' && form.shared ? 'confirmed' : form.status
-    const shouldLockExchange = lockedStatuses.includes(finalStatus)
-    const exchangeSource =
-      form.fromCurrency === form.toCurrency ? 'Mesma moeda' : conversionPreview.source
-    const exchangeDetail = getExchangeSourceDetail(form, exchangeState, exchangeSource)
-    const nextTransaction = {
-      id: editingId || `txn-${Date.now()}`,
-      description: form.description.trim(),
-      type: form.type,
-      amount: Number(form.amount) || 0,
-      fromCurrency: form.fromCurrency,
-      toCurrency: form.toCurrency,
-      convertedAmount: conversionPreview.finalAmount,
-      accountId: form.accountId,
-      cardId: form.type === 'expense' ? form.cardId : '',
-      categoryId: form.categoryId,
-      date: form.date,
-      percentageFee: Number(form.percentageFee) || 0,
-      fixedFee: Number(form.fixedFee) || 0,
-      manualRate: form.manualRate,
-      rate: conversionPreview.rate,
-      useAutomaticRate: form.useAutomaticRate,
-      status: finalStatus,
-      shared: form.type === 'expense' ? form.shared : false,
-      sharedAmountToReceive:
-        form.type === 'expense' && form.shared
-          ? Number(form.sharedAmountToReceive) || 0
-          : 0,
-      exchangeSource,
-      exchangeDetail,
-      exchangeDate: conversionPreview.rateDate,
-      sourceUpdatedAt: conversionPreview.rateDate,
-      confirmedAt: shouldLockExchange ? currentTransaction?.confirmedAt || new Date().toISOString() : '',
-      exchangeLocked: shouldLockExchange,
+
+    if (editingId && currentTransaction && isRecurringTransaction(currentTransaction)) {
+      const scope = getScopeFromPrompt('edit')
+
+      if (!scope) {
+        return
+      }
+
+      setTransactions((currentTransactions) =>
+        currentTransactions.map((transaction) =>
+          isInScope(transaction, currentTransaction, scope)
+            ? applyEditToRecurringOccurrence(transaction, currentTransaction)
+            : transaction,
+        ),
+      )
+      resetForm()
+      setFeedback('Recorrência atualizada conforme o escopo escolhido.')
+      return
     }
+
+    const nextTransactions =
+      form.recurrenceType === 'fixed'
+        ? createFixedTransactions()
+        : form.recurrenceType === 'installment'
+          ? createInstallmentTransactions()
+          : [createSingleTransaction(currentTransaction)]
 
     setTransactions((currentTransactions) => {
       if (editingId) {
         return currentTransactions.map((transaction) =>
-          transaction.id === editingId ? nextTransaction : transaction,
+          transaction.id === editingId ? nextTransactions[0] : transaction,
         )
       }
 
-      return [nextTransaction, ...currentTransactions]
+      return [...nextTransactions, ...currentTransactions]
     })
 
     const successMessage = editingId
       ? 'Transação atualizada com sucesso.'
-      : 'Transação salva com sucesso.'
+      : form.recurrenceType === 'fixed'
+        ? 'Transação fixa mensal criada com sucesso.'
+        : form.recurrenceType === 'installment'
+          ? 'Parcelamento criado com sucesso.'
+          : 'Transação salva com sucesso.'
     resetForm()
     setFeedback(successMessage)
   }
 
   function handleDelete(transactionId) {
+    const transactionToDelete = transactions.find(
+      (transaction) => transaction.id === transactionId,
+    )
+    let scope = 'single'
+
+    if (transactionToDelete && isRecurringTransaction(transactionToDelete)) {
+      scope = getScopeFromPrompt('delete')
+
+      if (!scope) {
+        return
+      }
+    }
+
     const shouldDelete = window.confirm('Deseja excluir esta transação?')
 
     if (!shouldDelete) {
       return
     }
 
-    setTransactions((currentTransactions) =>
-      currentTransactions.filter((transaction) => transaction.id !== transactionId),
-    )
+    setTransactions((currentTransactions) => {
+      if (!transactionToDelete || !isRecurringTransaction(transactionToDelete)) {
+        return currentTransactions.filter((transaction) => transaction.id !== transactionId)
+      }
+
+      return currentTransactions.filter(
+        (transaction) => !isInScope(transaction, transactionToDelete, scope),
+      )
+    })
     setFeedback('Transação excluída com sucesso.')
   }
 
@@ -531,7 +911,7 @@ function Transactions() {
     <div className="page-stack">
       <div className="toolbar">
         <div>
-          <strong>{filteredTransactions.length} transações</strong>
+          <strong>{sortedTransactions.length} transações</strong>
           <span>Transações integradas com contas, cartões e câmbio.</span>
         </div>
         <button
@@ -546,6 +926,12 @@ function Transactions() {
 
       {error ? <p className="form-error">{error}</p> : null}
       {feedback ? <p className="form-success">{feedback}</p> : null}
+
+      <SortControls
+        options={transactionSortOptions}
+        sortConfig={transactionSortConfig}
+        onChange={updateTransactionSort}
+      />
 
       <CollapsibleFilters
         title="Filtros de transações"
@@ -619,11 +1005,23 @@ function Transactions() {
           </label>
           <label className="field">
             <span>Data inicial</span>
-            <input type="date" value={filters.startDate} onChange={(event) => updateFilter('startDate', event.target.value)} />
+            <DatePicker
+              value={filters.startDate}
+              onChange={(value) => updateFilter('startDate', value)}
+              allowClear
+              placeholder="Data inicial"
+              ariaLabel="Selecionar data inicial"
+            />
           </label>
           <label className="field">
             <span>Data final</span>
-            <input type="date" value={filters.endDate} onChange={(event) => updateFilter('endDate', event.target.value)} />
+            <DatePicker
+              value={filters.endDate}
+              onChange={(value) => updateFilter('endDate', value)}
+              allowClear
+              placeholder="Data final"
+              ariaLabel="Selecionar data final"
+            />
           </label>
           <button className="secondary-button filter-reset" type="button" onClick={() => setFilters(emptyFilters)}>
             Limpar filtros
@@ -712,7 +1110,12 @@ function Transactions() {
             </label>
             <label className="field">
               <span>Data</span>
-              <input type="date" value={form.date} onChange={(event) => updateField('date', event.target.value)} />
+              <DatePicker
+                value={form.date}
+                onChange={(value) => updateField('date', value)}
+                placeholder="Data da transação"
+                ariaLabel="Selecionar data da transação"
+              />
             </label>
             <label className="field">
               <span>Status</span>
@@ -724,6 +1127,141 @@ function Transactions() {
                 <option value="cancelled">{statusLabels.cancelled}</option>
               </select>
             </label>
+            <div className="recurrence-section span-2">
+              <div className="recurrence-heading">
+                <strong>Repetição</strong>
+                <span>Crie lançamentos fixos mensais ou parcelamentos.</span>
+              </div>
+              <div className="recurrence-grid">
+                <label className="field">
+                  <span>Tipo de repetição</span>
+                  <select
+                    value={form.recurrenceType}
+                    disabled={Boolean(editingId)}
+                    onChange={(event) => updateField('recurrenceType', event.target.value)}
+                  >
+                    <option value="none">{recurrenceTypeLabels.none}</option>
+                    <option value="fixed">{recurrenceTypeLabels.fixed}</option>
+                    <option value="installment">{recurrenceTypeLabels.installment}</option>
+                  </select>
+                </label>
+
+                {editingId && form.recurrenceType !== 'none' ? (
+                  <p className="recurrence-note">
+                    Ao salvar, escolha o escopo: só este mês, esta e as próximas ou toda a recorrência.
+                  </p>
+                ) : null}
+
+                {form.recurrenceType === 'fixed' ? (
+                  <>
+                    <label className="field">
+                      <span>Dia do mês</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="31"
+                        value={form.repeatDay}
+                        onChange={(event) => updateField('repeatDay', event.target.value)}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Data inicial</span>
+                      <DatePicker
+                        value={form.recurrenceStartDate}
+                        onChange={(value) => updateField('recurrenceStartDate', value)}
+                        placeholder="Data inicial"
+                        ariaLabel="Selecionar início da recorrência"
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Data final opcional</span>
+                      <DatePicker
+                        value={form.recurrenceEndDate}
+                        onChange={(value) => updateField('recurrenceEndDate', value)}
+                        allowClear
+                        placeholder="Sem data final"
+                        ariaLabel="Selecionar fim da recorrência"
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Status inicial</span>
+                      <select
+                        value={form.recurrenceInitialStatus}
+                        onChange={(event) =>
+                          updateField('recurrenceInitialStatus', event.target.value)
+                        }
+                      >
+                        <option value="pending">{statusLabels.pending}</option>
+                        <option value="receivable">{statusLabels.receivable}</option>
+                        <option value="confirmed">{statusLabels.confirmed}</option>
+                      </select>
+                    </label>
+                  </>
+                ) : null}
+
+                {form.recurrenceType === 'installment' ? (
+                  <>
+                    <label className="field">
+                      <span>Quantidade de parcelas</span>
+                      <input
+                        type="number"
+                        min="2"
+                        max="120"
+                        value={form.installmentCount}
+                        onChange={(event) =>
+                          updateField('installmentCount', event.target.value)
+                        }
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Parcela inicial</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max={form.installmentCount || 120}
+                        value={form.installmentStartNumber}
+                        onChange={(event) =>
+                          updateField('installmentStartNumber', event.target.value)
+                        }
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Valor informado</span>
+                      <select
+                        value={form.installmentAmountMode}
+                        onChange={(event) =>
+                          updateField('installmentAmountMode', event.target.value)
+                        }
+                      >
+                        <option value="total">Valor total</option>
+                        <option value="installment">Valor da parcela</option>
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Primeira parcela</span>
+                      <DatePicker
+                        value={form.installmentFirstDate}
+                        onChange={(value) => updateField('installmentFirstDate', value)}
+                        placeholder="Data da primeira parcela"
+                        ariaLabel="Selecionar data da primeira parcela"
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Status inicial</span>
+                      <select
+                        value={form.installmentInitialStatus}
+                        onChange={(event) =>
+                          updateField('installmentInitialStatus', event.target.value)
+                        }
+                      >
+                        <option value="pending">{statusLabels.pending}</option>
+                        <option value="confirmed">{statusLabels.confirmed}</option>
+                      </select>
+                    </label>
+                  </>
+                ) : null}
+              </div>
+            </div>
             <label className="field">
               <span>Taxa percentual (%)</span>
               <input type="number" min="0" step="0.01" value={form.percentageFee} onChange={(event) => updateField('percentageFee', event.target.value)} />
@@ -825,20 +1363,85 @@ function Transactions() {
           <table className="transactions-table">
             <thead>
               <tr>
-                <th>Descrição</th>
-                <th>Tipo</th>
-                <th>Conta</th>
-                <th>Valor original</th>
-                <th>Convertido</th>
-                <th>Categoria</th>
-                <th>Data</th>
-                <th>Status</th>
+                <th>
+                  <SortButton
+                    label="Descrição"
+                    sortKey="description"
+                    sortConfig={transactionSortConfig}
+                    onSort={requestTransactionSort}
+                  />
+                </th>
+                <th>
+                  <SortButton
+                    label="Tipo"
+                    sortKey="type"
+                    sortConfig={transactionSortConfig}
+                    onSort={requestTransactionSort}
+                  />
+                </th>
+                <th>
+                  <SortButton
+                    label="Conta"
+                    sortKey="account"
+                    sortConfig={transactionSortConfig}
+                    onSort={requestTransactionSort}
+                  />
+                </th>
+                <th>
+                  <SortButton
+                    label="Cartão"
+                    sortKey="card"
+                    sortConfig={transactionSortConfig}
+                    onSort={requestTransactionSort}
+                  />
+                </th>
+                <th>
+                  <SortButton
+                    label="Valor original"
+                    sortKey="amount"
+                    sortConfig={transactionSortConfig}
+                    onSort={requestTransactionSort}
+                  />
+                </th>
+                <th>
+                  <SortButton
+                    label="Convertido"
+                    sortKey="converted"
+                    sortConfig={transactionSortConfig}
+                    onSort={requestTransactionSort}
+                  />
+                </th>
+                <th>
+                  <SortButton
+                    label="Categoria"
+                    sortKey="category"
+                    sortConfig={transactionSortConfig}
+                    onSort={requestTransactionSort}
+                  />
+                </th>
+                <th>
+                  <SortButton
+                    label="Data"
+                    sortKey="date"
+                    sortConfig={transactionSortConfig}
+                    onSort={requestTransactionSort}
+                  />
+                </th>
+                <th>
+                  <SortButton
+                    label="Status"
+                    sortKey="status"
+                    sortConfig={transactionSortConfig}
+                    onSort={requestTransactionSort}
+                  />
+                </th>
                 <th>Ações</th>
               </tr>
             </thead>
             <tbody>
-              {filteredTransactions.map((transaction) => {
+              {sortedTransactions.map((transaction) => {
                 const account = accounts.find((item) => item.id === transaction.accountId)
+                const card = cards.find((item) => item.id === transaction.cardId)
                 const conversionView = getTransactionConversionView(transaction)
                 const sharedAmountToReceive =
                   Number(transaction.sharedAmountToReceive) || 0
@@ -852,6 +1455,13 @@ function Transactions() {
                           A receber {formatCurrency(sharedAmountToReceive, transaction.toCurrency)}
                         </small>
                       ) : null}
+                      {isRecurringTransaction(transaction) ? (
+                        <small className="shared-note">
+                          {transaction.recurrenceType === 'installment'
+                            ? `Parcela ${transaction.installmentNumber}/${transaction.installmentTotal}`
+                            : 'Fixa mensal'}
+                        </small>
+                      ) : null}
                     </td>
                     <td data-label="Tipo">
                       <span className={`status-pill ${transaction.type}`}>
@@ -859,6 +1469,7 @@ function Transactions() {
                       </span>
                     </td>
                     <td data-label="Conta">{account?.name || 'Conta removida'}</td>
+                    <td data-label="Cartão">{card?.name || 'Sem cartão'}</td>
                     <td data-label="Valor original">
                       {formatCurrency(transaction.amount, transaction.fromCurrency)}
                       <small>{transaction.fromCurrency}</small>
@@ -944,7 +1555,7 @@ function Transactions() {
           </table>
         </div>
 
-        {filteredTransactions.length === 0 ? (
+        {sortedTransactions.length === 0 ? (
           <p className="empty-state">Nenhuma transação encontrada com os filtros atuais.</p>
         ) : null}
       </section>

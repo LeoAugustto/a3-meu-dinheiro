@@ -3,9 +3,11 @@ import { useOutletContext } from 'react-router-dom'
 import {
   ArrowDownLeft,
   ArrowUpRight,
+  CalendarClock,
   CircleDollarSign,
   HandCoins,
   Landmark,
+  Repeat2,
   WalletCards,
 } from 'lucide-react'
 import CategoryBar from '../components/CategoryBar'
@@ -14,6 +16,11 @@ import MonthlyBalanceHero from '../components/MonthlyBalanceHero'
 import MonthlyComparisonChart from '../components/MonthlyComparisonChart'
 import TransactionItem from '../components/TransactionItem'
 import { formatCurrency } from '../utils/currency'
+import {
+  formatCommitmentSubtitle,
+  getCommitmentSummary,
+  recurrenceTypeLabels,
+} from '../utils/recurrences'
 import {
   calculateAccountBalances,
   calculateCardUsage,
@@ -72,6 +79,10 @@ function Dashboard() {
     ...categoryTotals.map((category) => category.total),
     1,
   )
+  const commitmentSummary = useMemo(
+    () => getCommitmentSummary(transactions, selectedMonth),
+    [transactions, selectedMonth],
+  )
 
   function getCategoryName(categoryId) {
     return categories.find((category) => category.id === categoryId)?.name || 'Outros'
@@ -111,6 +122,84 @@ function Dashboard() {
       </section>
 
       <MonthlyBalanceHero summary={summary} currency={settings.mainCurrency} />
+
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow">Planejamento</span>
+            <h2>Compromissos futuros</h2>
+          </div>
+          <CalendarClock size={22} />
+        </div>
+
+        <div className="metrics-grid compact-metrics">
+          <MetricCard
+            title="Despesas fixas ativas"
+            value={formatCurrency(
+              commitmentSummary.fixedExpensesMonthlyValue,
+              settings.mainCurrency,
+            )}
+            subtitle={`${commitmentSummary.fixedExpensesCount} recorrências`}
+            icon={Repeat2}
+            variant="expense"
+          />
+          <MetricCard
+            title="Receitas fixas ativas"
+            value={formatCurrency(
+              commitmentSummary.fixedIncomesMonthlyValue,
+              settings.mainCurrency,
+            )}
+            subtitle={`${commitmentSummary.fixedIncomesCount} recorrências`}
+            icon={ArrowUpRight}
+            variant="income"
+          />
+          <MetricCard
+            title="Parcelamentos ativos"
+            value={formatCurrency(
+              commitmentSummary.installmentsMonthlyValue,
+              settings.mainCurrency,
+            )}
+            subtitle={`${commitmentSummary.installmentsOpenCount} parcelas em aberto`}
+            icon={WalletCards}
+            variant="info"
+          />
+          <MetricCard
+            title="Restante parcelado"
+            value={formatCurrency(
+              commitmentSummary.installmentsRemainingValue,
+              settings.mainCurrency,
+            )}
+            subtitle="Valor restante previsto"
+            icon={CircleDollarSign}
+            variant="neutral"
+          />
+        </div>
+
+        {commitmentSummary.rows.length === 0 ? (
+          <p className="empty-state">Nenhuma recorrência ou parcelamento ativo.</p>
+        ) : (
+          <div className="compact-list commitment-list">
+            {commitmentSummary.rows.slice(0, 6).map((row) => (
+              <div className="compact-row" key={row.id}>
+                <div>
+                  <strong>{row.name}</strong>
+                  <span>
+                    {recurrenceTypeLabels[row.type] || row.type} • Próximo:{' '}
+                    {row.nextLabel}
+                  </span>
+                  <span>{formatCommitmentSubtitle(row)}</span>
+                </div>
+                <strong>
+                  {formatCurrency(
+                    row.monthlyValue || row.remainingValue,
+                    row.currency || settings.mainCurrency,
+                  )}
+                </strong>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="dashboard-grid">
         <div className="panel chart-panel">
