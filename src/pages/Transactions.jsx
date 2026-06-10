@@ -10,9 +10,9 @@ import {
   X,
 } from 'lucide-react'
 import CollapsibleFilters from '../components/CollapsibleFilters'
+import ConfirmModal from '../components/ConfirmModal'
 import DatePicker from '../components/DatePicker'
 import SortButton from '../components/SortButton'
-import SortControls from '../components/SortControls'
 import { currencies } from '../data/mockData'
 import { useSortableData } from '../hooks/useSortableData'
 import {
@@ -31,7 +31,6 @@ import {
 import {
   addMonthsToDate,
   getDateWithDay,
-  getScopeFromPrompt,
   isRecurringTransaction,
   recurrenceTypeLabels,
 } from '../utils/recurrences'
@@ -47,6 +46,24 @@ const emptyFilters = {
   startDate: '',
   endDate: '',
 }
+
+const recurrenceScopeOptions = [
+  {
+    value: 'single',
+    label: 'Só este mês',
+    description: 'Altera apenas este lançamento.',
+  },
+  {
+    value: 'future',
+    label: 'Esta e as próximas',
+    description: 'Mantém meses anteriores e aplica deste lançamento em diante.',
+  },
+  {
+    value: 'all',
+    label: 'Toda a recorrência',
+    description: 'Aplica em todos os lançamentos vinculados.',
+  },
+]
 
 const lockedStatuses = ['confirmed', 'paid']
 const openReceivableStatuses = ['pending', 'receivable']
@@ -178,6 +195,7 @@ function Transactions() {
   const [form, setForm] = useState(() => createEmptyForm(settings, accounts))
   const [filters, setFilters] = useState(emptyFilters)
   const [areFiltersOpen, setAreFiltersOpen] = useState(false)
+  const [pendingAction, setPendingAction] = useState(null)
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
 
@@ -473,7 +491,6 @@ function Transactions() {
     sortedItems: sortedTransactions,
     sortConfig: transactionSortConfig,
     requestSort: requestTransactionSort,
-    updateSort: updateTransactionSort,
   } = useSortableData(filteredTransactions, transactionSortOptions, {
     key: 'date',
     direction: 'desc',
@@ -815,6 +832,66 @@ function Transactions() {
     return transaction.date >= sourceTransaction.date
   }
 
+  function openPendingAction(action) {
+    setPendingAction({ scope: 'single', ...action })
+  }
+
+  function closePendingAction() {
+    setPendingAction(null)
+  }
+
+  function updatePendingScope(scope) {
+    setPendingAction((currentAction) =>
+      currentAction ? { ...currentAction, scope } : currentAction,
+    )
+  }
+
+  function confirmPendingAction() {
+    if (!pendingAction) {
+      return
+    }
+
+    if (pendingAction.type === 'editScope') {
+      const currentTransaction = pendingAction.transaction
+
+      setTransactions((currentTransactions) =>
+        currentTransactions.map((transaction) =>
+          isInScope(transaction, currentTransaction, pendingAction.scope)
+            ? applyEditToRecurringOccurrence(transaction, currentTransaction)
+            : transaction,
+        ),
+      )
+      closePendingAction()
+      resetForm()
+      setFeedback('Recorrência atualizada conforme o escopo escolhido.')
+      return
+    }
+
+    if (pendingAction.type === 'deleteScope') {
+      const transactionToDelete = pendingAction.transaction
+
+      setTransactions((currentTransactions) =>
+        currentTransactions.filter(
+          (transaction) =>
+            !isInScope(transaction, transactionToDelete, pendingAction.scope),
+        ),
+      )
+      closePendingAction()
+      setFeedback('Transação excluída com sucesso.')
+      return
+    }
+
+    if (pendingAction.type === 'deleteSingle') {
+      setTransactions((currentTransactions) =>
+        currentTransactions.filter(
+          (transaction) => transaction.id !== pendingAction.transaction.id,
+        ),
+      )
+      closePendingAction()
+      setFeedback('Transação excluída com sucesso.')
+    }
+  }
+
   function handleSubmit(event) {
     event.preventDefault()
     const validationError = validateForm()
@@ -829,21 +906,7 @@ function Transactions() {
     )
 
     if (editingId && currentTransaction && isRecurringTransaction(currentTransaction)) {
-      const scope = getScopeFromPrompt('edit')
-
-      if (!scope) {
-        return
-      }
-
-      setTransactions((currentTransactions) =>
-        currentTransactions.map((transaction) =>
-          isInScope(transaction, currentTransaction, scope)
-            ? applyEditToRecurringOccurrence(transaction, currentTransaction)
-            : transaction,
-        ),
-      )
-      resetForm()
-      setFeedback('Recorrência atualizada conforme o escopo escolhido.')
+      openPendingAction({ type: 'editScope', transaction: currentTransaction })
       return
     }
 
@@ -879,32 +942,15 @@ function Transactions() {
     const transactionToDelete = transactions.find(
       (transaction) => transaction.id === transactionId,
     )
-    let scope = 'single'
 
     if (transactionToDelete && isRecurringTransaction(transactionToDelete)) {
-      scope = getScopeFromPrompt('delete')
-
-      if (!scope) {
-        return
-      }
-    }
-
-    const shouldDelete = window.confirm('Deseja excluir esta transação?')
-
-    if (!shouldDelete) {
+      openPendingAction({ type: 'deleteScope', transaction: transactionToDelete })
       return
     }
 
-    setTransactions((currentTransactions) => {
-      if (!transactionToDelete || !isRecurringTransaction(transactionToDelete)) {
-        return currentTransactions.filter((transaction) => transaction.id !== transactionId)
-      }
-
-      return currentTransactions.filter(
-        (transaction) => !isInScope(transaction, transactionToDelete, scope),
-      )
-    })
-    setFeedback('Transação excluída com sucesso.')
+    if (transactionToDelete) {
+      openPendingAction({ type: 'deleteSingle', transaction: transactionToDelete })
+    }
   }
 
   return (
@@ -926,12 +972,6 @@ function Transactions() {
 
       {error ? <p className="form-error">{error}</p> : null}
       {feedback ? <p className="form-success">{feedback}</p> : null}
-
-      <SortControls
-        options={transactionSortOptions}
-        sortConfig={transactionSortConfig}
-        onChange={updateTransactionSort}
-      />
 
       <CollapsibleFilters
         title="Filtros de transações"
@@ -1562,6 +1602,35 @@ function Transactions() {
       {!selectedAccount && isFormOpen ? (
         <p className="form-error">Cadastre uma conta antes de lançar transações.</p>
       ) : null}
+
+      <ConfirmModal
+        open={Boolean(pendingAction)}
+        title={
+          pendingAction?.type === 'editScope'
+            ? 'Editar recorrência ou parcelamento'
+            : pendingAction?.type === 'deleteScope'
+              ? 'Excluir recorrência ou parcelamento'
+              : 'Deseja excluir esta transação?'
+        }
+        description={
+          pendingAction?.type === 'editScope'
+            ? 'Escolha quais lançamentos devem receber as alterações.'
+            : pendingAction?.type === 'deleteScope'
+              ? 'Escolha quais lançamentos devem ser removidos.'
+              : 'Esta ação remove apenas o lançamento selecionado.'
+        }
+        options={
+          pendingAction?.type === 'editScope' || pendingAction?.type === 'deleteScope'
+            ? recurrenceScopeOptions
+            : []
+        }
+        selectedOption={pendingAction?.scope || 'single'}
+        onSelectOption={updatePendingScope}
+        confirmLabel={pendingAction?.type === 'editScope' ? 'Continuar' : 'Excluir'}
+        variant={pendingAction?.type?.startsWith('delete') ? 'danger' : 'default'}
+        onCancel={closePendingAction}
+        onConfirm={confirmPendingAction}
+      />
     </div>
   )
 }

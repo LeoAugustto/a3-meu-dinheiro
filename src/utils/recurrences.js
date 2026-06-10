@@ -38,27 +38,6 @@ export function getDateWithDay(baseDate, repeatDay) {
   )}`
 }
 
-export function getScopeFromPrompt(action = 'editar') {
-  const answer = window.prompt(
-    `${action === 'delete' ? 'Excluir' : 'Editar'} recorrência/parcelamento:\n1 - Só este mês\n2 - Esta e as próximas\n3 - Toda a recorrência`,
-    '1',
-  )
-
-  if (answer === null) {
-    return ''
-  }
-
-  if (answer === '2') {
-    return 'future'
-  }
-
-  if (answer === '3') {
-    return 'all'
-  }
-
-  return 'single'
-}
-
 export function isRecurringTransaction(transaction) {
   return (
     transaction.recurrenceType === 'fixed' ||

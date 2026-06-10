@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Minus, TrendingDown, TrendingUp } from 'lucide-react'
 import { formatCurrency } from '../utils/currency'
 
@@ -10,10 +11,14 @@ function getPercent(value, base) {
 }
 
 function formatPercent(value) {
-  return `${Math.round(value)}%`
+  return `${new Intl.NumberFormat('pt-BR', {
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 1,
+  }).format(value)}%`
 }
 
 function MonthlyBalanceHero({ summary, currency }) {
+  const [activeTooltip, setActiveTooltip] = useState(null)
   const income = Number(summary.income) || 0
   const expenses = Number(summary.expenses) || 0
   const balance = Number(summary.balance) || 0
@@ -37,6 +42,72 @@ function MonthlyBalanceHero({ summary, currency }) {
   const BalanceIcon = balance > 0 ? TrendingUp : balance < 0 ? TrendingDown : Minus
   const hasAnyBarValue = expenses > 0 || positiveBalance > 0 || receivables > 0
   const noIncomeText = income <= 0 ? 'Sem receita no mês para calcular percentual.' : ''
+  const segments = [
+    {
+      key: 'expense',
+      className: 'expense',
+      label: 'Despesas',
+      value: expenses,
+      width: expenseWidth,
+      percent: expensePercent,
+      description:
+        income > 0
+          ? `${formatPercent(expensePercent)} das receitas`
+          : noIncomeText,
+    },
+    {
+      key: 'income',
+      className: 'income',
+      label: 'Saldo restante',
+      value: positiveBalance,
+      width: balanceWidth,
+      percent: balancePercent,
+      description:
+        income > 0
+          ? `${formatPercent(balancePercent)} das receitas`
+          : noIncomeText,
+    },
+    {
+      key: 'receivable',
+      className: 'receivable',
+      label: 'A receber',
+      value: receivables,
+      width: receivableWidth,
+      percent: receivablePercent,
+      description:
+        income > 0
+          ? `${formatPercent(receivablePercent)} das receitas • Valor ainda não confirmado`
+          : 'Valor ainda não confirmado',
+    },
+  ].filter((segment) => segment.value > 0)
+
+  function showSegmentTooltip(event, segment) {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect()
+    const tooltipWidth = 220
+    const margin = 12
+    const left = Math.min(
+      Math.max(margin + tooltipWidth / 2, rect.left + rect.width / 2),
+      window.innerWidth - margin - tooltipWidth / 2,
+    )
+    const shouldShowBelow = rect.top < 110
+    const top = shouldShowBelow ? rect.bottom + 12 : rect.top - 12
+
+    setActiveTooltip({
+      ...segment,
+      formattedValue: formatCurrency(segment.value, currency),
+      left,
+      top,
+      placement: shouldShowBelow ? 'below' : 'above',
+    })
+  }
+
+  function hideSegmentTooltip() {
+    setActiveTooltip(null)
+  }
 
   return (
     <section className={`panel balance-hero ${balanceState}`}>
@@ -75,51 +146,43 @@ function MonthlyBalanceHero({ summary, currency }) {
         className={`balance-hero-bar ${hasAnyBarValue ? '' : 'is-empty'}`}
         aria-label="Distribuição do balanço mensal"
       >
-        {expenses > 0 ? (
+        {segments.map((segment) => (
           <span
-            className="balance-segment expense"
-            style={{ width: `${expenseWidth}%` }}
+            className={`balance-segment ${segment.className} ${
+              activeTooltip?.key === segment.key ? 'is-active' : ''
+            }`}
+            style={{ width: `${segment.width}%` }}
             tabIndex={0}
-          >
-            <span className="balance-tooltip">
-              {income > 0
-                ? `Despesas representam ${formatPercent(expensePercent)} das receitas`
-                : noIncomeText}
-              <strong>{formatCurrency(expenses, currency)}</strong>
-            </span>
-          </span>
-        ) : null}
-
-        {positiveBalance > 0 ? (
-          <span
-            className="balance-segment income"
-            style={{ width: `${balanceWidth}%` }}
-            tabIndex={0}
-          >
-            <span className="balance-tooltip">
-              {income > 0
-                ? `Saldo representa ${formatPercent(balancePercent)} das receitas`
-                : noIncomeText}
-              <strong>{formatCurrency(positiveBalance, currency)}</strong>
-            </span>
-          </span>
-        ) : null}
-
-        {receivables > 0 ? (
-          <span
-            className="balance-segment receivable"
-            style={{ width: `${receivableWidth}%` }}
-            tabIndex={0}
-          >
-            <span className="balance-tooltip">
-              {income > 0
-                ? `A receber representa ${formatPercent(receivablePercent)} das receitas`
-                : 'A receber registrado neste mês'}
-              <strong>{formatCurrency(receivables, currency)}</strong>
-            </span>
-          </span>
-        ) : null}
+            key={segment.key}
+            title={`${segment.label}: ${formatCurrency(segment.value, currency)}. ${
+              segment.description
+            }`}
+            aria-label={`${segment.label}: ${formatCurrency(segment.value, currency)}. ${
+              segment.description
+            }`}
+            onPointerEnter={(event) => showSegmentTooltip(event, segment)}
+            onPointerMove={(event) => showSegmentTooltip(event, segment)}
+            onPointerLeave={hideSegmentTooltip}
+            onFocus={(event) => showSegmentTooltip(event, segment)}
+            onBlur={hideSegmentTooltip}
+          />
+        ))}
       </div>
+
+      {activeTooltip ? (
+        <div
+          className={`balance-fixed-tooltip is-${activeTooltip.placement}`}
+          style={{
+            left: `${activeTooltip.left}px`,
+            top: `${activeTooltip.top}px`,
+          }}
+          role="tooltip"
+        >
+          <strong>{activeTooltip.label}</strong>
+          <span>{activeTooltip.formattedValue}</span>
+          <small>{activeTooltip.description}</small>
+        </div>
+      ) : null}
 
       <div className="balance-hero-legend">
         <span className="legend-item expense">Despesas</span>

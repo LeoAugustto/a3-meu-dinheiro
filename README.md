@@ -69,7 +69,7 @@ npm run build
 - Transacoes fixas mensais para receitas e despesas recorrentes.
 - Parcelamentos com geracao automatica de parcelas mensais.
 - Edicao e exclusao por escopo: somente este mes, esta e as proximas, ou toda a recorrencia.
-- Ordenacao por campo nas listas principais, com controles adaptados para desktop e mobile.
+- Ordenacao por icones nos cabecalhos da tabela de transacoes.
 - Acoes rapidas para confirmar recebimento, confirmar despesa e marcar valor compartilhado como recebido.
 - Relatorios com filtros, ordenacao, exportacao CSV, impressao e resumos por periodo.
 - Relatorios com secao de recorrencias e parcelamentos.
@@ -133,7 +133,7 @@ No mobile:
 - tabelas de transacoes viram cards;
 - filtros comecam recolhidos;
 - o grafico de receitas vs despesas vira lista mensal compacta;
-- controles de ordenacao aparecem em formato compacto;
+- a tabela de transacoes vira cards e preserva a ordem escolhida no desktop;
 - MonthPicker e DatePicker respeitam largura da tela e modo escuro;
 - popovers usam posicionamento seguro para evitar cortes e overflow horizontal.
 

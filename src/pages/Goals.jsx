@@ -2,8 +2,6 @@ import { useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { CalendarClock, Edit3, Plus, Target, Trash2, X } from 'lucide-react'
 import DatePicker from '../components/DatePicker'
-import SortControls from '../components/SortControls'
-import { useSortableData } from '../hooks/useSortableData'
 import { formatCurrency } from '../utils/currency'
 import { formatDate } from '../utils/finance'
 
@@ -24,28 +22,11 @@ function Goals() {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
-  const goalSortOptions = [
-    { key: 'name', label: 'Nome', getValue: (goal) => goal.name },
-    { key: 'current', label: 'Valor atual', getValue: (goal) => Number(goal.current) || 0 },
-    { key: 'target', label: 'Valor alvo', getValue: (goal) => Number(goal.target) || 0 },
-    {
-      key: 'progress',
-      label: 'Progresso',
-      getValue: (goal) =>
-        Number(goal.target) > 0
-          ? (Number(goal.current) / Number(goal.target)) * 100
-          : 0,
-    },
-    { key: 'deadline', label: 'Prazo', getValue: (goal) => goal.deadline || '' },
-  ]
-  const {
-    sortedItems: sortedGoals,
-    sortConfig: goalSortConfig,
-    updateSort: updateGoalSort,
-  } = useSortableData(goals, goalSortOptions, {
-    key: 'deadline',
-    direction: 'asc',
-  })
+  const sortedGoals = [...goals].sort((first, second) =>
+    String(first.deadline || '9999-12-31').localeCompare(
+      String(second.deadline || '9999-12-31'),
+    ),
+  )
 
   function updateField(field, value) {
     setForm((currentForm) => ({ ...currentForm, [field]: value }))
@@ -123,12 +104,6 @@ function Goals() {
 
       {error ? <p className="form-error">{error}</p> : null}
       {feedback ? <p className="form-success">{feedback}</p> : null}
-
-      <SortControls
-        options={goalSortOptions}
-        sortConfig={goalSortConfig}
-        onChange={updateGoalSort}
-      />
 
       {isFormOpen ? (
         <section className="panel">

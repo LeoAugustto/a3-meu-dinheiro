@@ -16,9 +16,7 @@ import CollapsibleFilters from '../components/CollapsibleFilters'
 import DatePicker from '../components/DatePicker'
 import MetricCard from '../components/MetricCard'
 import MonthPicker from '../components/MonthPicker'
-import SortControls from '../components/SortControls'
 import { currencies } from '../data/mockData'
-import { useSortableData } from '../hooks/useSortableData'
 import {
   formatCurrency,
   formatExchangeDate,
@@ -255,36 +253,7 @@ function Reports() {
     () => getCommitmentSummary(reportTransactions, selectedMonth),
     [reportTransactions, selectedMonth],
   )
-  const commitmentSortOptions = useMemo(
-    () => [
-      { key: 'name', label: 'Nome', getValue: (row) => row.name },
-      {
-        key: 'value',
-        label: 'Valor',
-        getValue: (row) => Number(row.monthlyValue || row.remainingValue) || 0,
-      },
-      {
-        key: 'nextDueDate',
-        label: 'Próximo vencimento',
-        getValue: (row) => row.nextDueDate || '',
-      },
-      {
-        key: 'remaining',
-        label: 'Parcelas restantes',
-        getValue: (row) => Number(row.openCount) || 0,
-      },
-      { key: 'status', label: 'Status', getValue: (row) => row.status },
-    ],
-    [],
-  )
-  const {
-    sortedItems: sortedCommitments,
-    sortConfig: commitmentSortConfig,
-    updateSort: updateCommitmentSort,
-  } = useSortableData(commitmentSummary.rows, commitmentSortOptions, {
-    key: 'nextDueDate',
-    direction: 'asc',
-  })
+  const sortedCommitments = commitmentSummary.rows
 
   function exportCsv() {
     const headers = [
@@ -634,12 +603,6 @@ function Reports() {
                 <h2>Recorrências e parcelamentos</h2>
               </div>
             </div>
-
-            <SortControls
-              options={commitmentSortOptions}
-              sortConfig={commitmentSortConfig}
-              onChange={updateCommitmentSort}
-            />
 
             <div className="metrics-grid compact-metrics">
               <MetricCard

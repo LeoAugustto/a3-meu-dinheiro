@@ -41,8 +41,8 @@ const GOALS_KEY = 'meuDinheiro.goals.v1'
 const CARDS_KEY = 'meuDinheiro.cards.v1'
 const ACCOUNTS_KEY = 'meuDinheiro.accounts.v1'
 const SIDEBAR_KEY = 'meuDinheiro.sidebarCollapsed.v1'
-const DATA_VERSION_KEY = 'meuDinheiro.demoDataVersion.v7'
-const CURRENT_DATA_VERSION = 'v7'
+const DATA_VERSION_KEY = 'meuDinheiro.demoDataVersion.v8'
+const CURRENT_DATA_VERSION = 'v8'
 const pagesWithMonthSelector = new Set(['/', '/transactions', '/reports'])
 const pagesWithExchangeRefresh = new Set(['/', '/transactions', '/reports'])
 

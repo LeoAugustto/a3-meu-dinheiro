@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { Edit3, Plus, Tags, Trash2, X } from 'lucide-react'
-import SortControls from '../components/SortControls'
-import { useSortableData } from '../hooks/useSortableData'
 import { formatCurrency } from '../utils/currency'
 import { getCategoryTotals } from '../utils/finance'
 
@@ -32,32 +30,13 @@ function Categories() {
     () => getCategoryTotals(transactions, selectedMonth),
     [transactions, selectedMonth],
   )
-  const categorySortOptions = useMemo(
-    () => [
-      { key: 'name', label: 'Nome', getValue: (category) => category.name },
-      { key: 'type', label: 'Tipo', getValue: (category) => category.type },
-      {
-        key: 'spent',
-        label: 'Gasto no mês',
-        getValue: (category) =>
-          totals.find((item) => item.categoryId === category.id)?.total || 0,
-      },
-      {
-        key: 'budget',
-        label: 'Orçamento',
-        getValue: (category) => Number(category.monthlyBudget) || 0,
-      },
-    ],
-    [totals],
+  const sortedCategories = useMemo(
+    () =>
+      [...categories].sort((first, second) =>
+        first.name.localeCompare(second.name, 'pt-BR'),
+      ),
+    [categories],
   )
-  const {
-    sortedItems: sortedCategories,
-    sortConfig: categorySortConfig,
-    updateSort: updateCategorySort,
-  } = useSortableData(categories, categorySortOptions, {
-    key: 'name',
-    direction: 'asc',
-  })
 
   function getTotalForCategory(categoryId) {
     return totals.find((item) => item.categoryId === categoryId)?.total || 0
@@ -171,12 +150,6 @@ function Categories() {
 
       {error ? <p className="form-error">{error}</p> : null}
       {feedback ? <p className="form-success">{feedback}</p> : null}
-
-      <SortControls
-        options={categorySortOptions}
-        sortConfig={categorySortConfig}
-        onChange={updateCategorySort}
-      />
 
       {isFormOpen ? (
         <section className="panel">

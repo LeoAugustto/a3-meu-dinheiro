@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { CalendarDays, CreditCard, Edit3, Plus, Trash2, X } from 'lucide-react'
-import SortControls from '../components/SortControls'
-import { useSortableData } from '../hooks/useSortableData'
 import { formatCurrency } from '../utils/currency'
 import { calculateCardUsage } from '../utils/finance'
 
@@ -28,33 +26,13 @@ function Cards() {
     () => calculateCardUsage(cards, transactions),
     [cards, transactions],
   )
-  const cardSortOptions = useMemo(
-    () => [
-      { key: 'name', label: 'Nome', getValue: (card) => card.name },
-      { key: 'brand', label: 'Bandeira', getValue: (card) => card.brand || '' },
-      {
-        key: 'bill',
-        label: 'Fatura atual',
-        getValue: (card) => Number(card.currentBill) || 0,
-      },
-      { key: 'limit', label: 'Limite', getValue: (card) => Number(card.limit) || 0 },
-      {
-        key: 'closingDay',
-        label: 'Fechamento',
-        getValue: (card) => Number(card.closingDay) || 0,
-      },
-      { key: 'dueDay', label: 'Vencimento', getValue: (card) => Number(card.dueDay) || 0 },
-    ],
-    [],
+  const sortedCards = useMemo(
+    () =>
+      [...cardsWithUsage].sort((first, second) =>
+        first.name.localeCompare(second.name, 'pt-BR'),
+      ),
+    [cardsWithUsage],
   )
-  const {
-    sortedItems: sortedCards,
-    sortConfig: cardSortConfig,
-    updateSort: updateCardSort,
-  } = useSortableData(cardsWithUsage, cardSortOptions, {
-    key: 'name',
-    direction: 'asc',
-  })
 
   function updateField(field, value) {
     setForm((currentForm) => ({ ...currentForm, [field]: value }))
@@ -134,12 +112,6 @@ function Cards() {
 
       {error ? <p className="form-error">{error}</p> : null}
       {feedback ? <p className="form-success">{feedback}</p> : null}
-
-      <SortControls
-        options={cardSortOptions}
-        sortConfig={cardSortConfig}
-        onChange={updateCardSort}
-      />
 
       {isFormOpen ? (
         <section className="panel">
