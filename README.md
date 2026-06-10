@@ -4,7 +4,7 @@ Aplicação React desenvolvida para a disciplina **Usabilidade, desenvolvimento 
 
 O **Meu Dinheiro** moderniza uma ideia de controle financeiro pessoal para web, com foco em UI/UX, responsividade, contas, cartões, metas, relatórios, recorrências, parcelamentos e controle multimoeda. A interface está em **PT-BR** e os dados de demonstração são fictícios e genéricos.
 
-![Logo Meu Dinheiro](src/assets/logo-meu-dinheiro.png)
+![Logo Meu Dinheiro](src/assets/logo-meu-dinheiro-v2.png)
 
 ## Tecnologias
 
